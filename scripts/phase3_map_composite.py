@@ -302,7 +302,7 @@ for i, ax in enumerate(axes.flat):
 
     mask_ocean(ax, muni_land_union)
     plot_base_map(ax, coast_union, muni_clip)
-
+    add_station_overlay(ax, stations, fontsize=5)
     style_axes_grid(ax, MAP_XLIM, MAP_YLIM, 3, 4)
     ax.set_title(MONTHS[i], fontsize=9, fontweight="bold")
 
