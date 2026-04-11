@@ -1,0 +1,52 @@
+# =============================================================================
+# pr_ngvla — .gitignore
+# Rule: commit CODE, not DATA or outputs
+# =============================================================================
+
+# --- Python cache ---
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# --- DATA: never commit raw or processed data ---
+# ERA5 NetCDF files are large and belong in data_raw/ on the server only
+data_raw/
+data_interim/
+data_products/
+
+# --- Outputs: generated figures, maps, tables ---
+outputs/
+
+# --- Logs ---
+logs/
+*.log
+
+# --- Environment / secrets ---
+.env
+.venv/
+env/
+# CDS API key (never commit this)
+.cdsapirc
+
+# --- Editor ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# Egg info
+src/*.egg-info/
+
+# Temp files
+tree_*.txt
+import
+EOF

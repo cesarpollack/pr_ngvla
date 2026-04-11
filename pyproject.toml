@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pr_ngvla"
+version = "0.1.0"
+description = "GIS-based atmospheric site suitability library for ngVLA Puerto Rico node"
+# FIX: removed 'readme = "README.md"' — file did not exist, caused pip warning.
+# A README.md is now included separately.
+requires-python = ">=3.11"
+# Runtime dependencies managed by conda (environment.yml).
+# Keep empty here to avoid pip/conda conflicts on server.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "ruff"]
+
+# [tool.setuptools.packages.find] with where=["src"] is the correct modern way
+# to tell setuptools that packages live under src/.
+# Do NOT also add [tool.setuptools] package-dir = {"" = "src"} — that would
+# be a duplicate declaration and could cause conflicts.
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.pytest.ini_options]
+# FIX: tests/ dir now exists. Run with: pytest
+testpaths = ["tests"]

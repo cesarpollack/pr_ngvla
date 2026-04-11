@@ -1,0 +1,66 @@
+name: pr_ngvla
+channels:
+  - conda-forge
+dependencies:
+  # --- Python runtime ---
+  - python=3.11
+
+  # --- Core scientific stack ---
+  - numpy
+  - scipy
+  - pandas
+  - pyarrow
+  - dask
+  - distributed
+
+  # --- Geospatial ---
+  - gdal
+  - geopandas
+  - shapely>=2
+  - pyproj
+  - rtree
+  - fiona
+  - rasterio
+  - rioxarray
+  - cartopy
+  - contextily
+
+  # --- Meteorology / arrays / formats ---
+  - xarray
+  - netcdf4
+  - h5netcdf
+  - h5py
+  - cftime
+  - cfgrib
+  - eccodes
+
+  # --- CDS API ---
+  - cdsapi
+
+  # --- Atmospheric physics ---
+  - metpy
+  - pint
+
+  # --- Modeling / interpolation ---
+  - scikit-learn
+  - pykrige
+
+  # --- Plotting ---
+  - matplotlib
+  - seaborn
+  - tqdm
+
+  # --- CLI / config ---
+  - click
+  - python-dotenv
+
+  # --- Networking ---
+  - requests
+
+  # FIX: '- pip' must be listed as a conda dependency BEFORE the pip subsection.
+  # Without this line, conda does not guarantee pip is installed before it
+  # tries to run the subsection below, which can silently fail on fresh envs.
+  - pytest
+  - pip
+  - pip:
+      - -e .    # installs pr_ngvla in editable mode from project root
