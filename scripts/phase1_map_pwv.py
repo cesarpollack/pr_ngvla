@@ -48,9 +48,9 @@ def create_figure(clim, coast_union, muni_clip, muni_land_union, stations):
         style_axes_grid(ax, row, col, nrows, ncols)
         add_station_overlay(ax, stations, fontsize=5)
         ax.set_title(MONTH_NAMES[idx], fontsize=10, fontweight="bold", pad=3)
-    add_colorbar(fig, mesh, "Mean PWV / TCWV (mm)")
+    add_colorbar(fig, mesh, "Mean PWV (mm)")
     fig.suptitle("20-Year Climatological Mean Monthly Precipitable Water Vapour (mm)\n"
-                 "Puerto Rico — ERA5 Single-Levels TCWV 2004–2023",
+                 "Puerto Rico — ERA5 Single-Levels Total Column Water Vapor 2004–2023",
                  fontsize=13, fontweight="bold", y=0.98)
     fig.subplots_adjust(left=0.04, right=0.91, top=0.93, bottom=0.06,
                         hspace=0.25, wspace=0.05)

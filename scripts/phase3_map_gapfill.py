@@ -219,16 +219,16 @@ ax_a.set_title(
 )
 
 # Annotation — best pixel computed from data
-ax_a.annotate(
-    f"SW corridor\n(best region)\n{best_muni}",
-    xy=(best_lon, best_lat),
-    xytext=(best_lon - 0.7, best_lat - 0.20),
-    fontsize=7.5,
-    color="darkgreen",
-    fontweight="bold",
-    arrowprops=dict(arrowstyle="->", color="darkgreen", lw=1.0),
-    transform=ccrs.PlateCarree(),
-)
+#ax_a.annotate(
+#    f"SW corridor\n(best region)\n{best_muni}",
+#    xy=(best_lon, best_lat),
+#    xytext=(best_lon - 0.7, best_lat - 0.20),
+#    fontsize=7.5,
+#    color="darkgreen",
+#    fontweight="bold",
+#    arrowprops=dict(arrowstyle="->", color="darkgreen", lw=1.0),
+#    transform=ccrs.PlateCarree(),
+#)
 
 out_ann = MAP_DIR / "phase3_composite_annual_gf.png"
 fig_a.savefig(out_ann, dpi=200, bbox_inches="tight")
