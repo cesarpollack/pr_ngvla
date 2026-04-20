@@ -335,3 +335,79 @@ def plot_dem(ax, elev: np.ndarray, extent: list):
         cmap="terrain", vmin=0,
         zorder=1,
     )
+
+def plot_station_inventory_map(
+    ax,
+    stations: gpd.GeoDataFrame,
+    color_by: str = "source",
+    size: float = 20.0,
+    alpha: float = 0.9,
+    show_legend: bool = True,
+) -> None:
+    """
+    Plot station points from a GeoDataFrame on a pre-existing axes.
+
+    Parameters
+    ----------
+    ax : matplotlib Axes
+        Axes on which to draw the station points.
+    stations : GeoDataFrame
+        GeoDataFrame in WGS84 containing point geometries.
+    color_by : str, default="source"
+        Column used to separate the points into categories for plotting.
+    size : float, default=20.0
+        Marker size in points^2.
+    alpha : float, default=0.9
+        Marker transparency.
+    show_legend : bool, default=True
+        Whether to draw a legend keyed by `color_by`.
+
+    Notes
+    -----
+    This function assumes the caller already drew the basemap and already
+    styled the axes. It only adds the station points.
+    """
+    if stations.empty:
+        return
+
+    if color_by not in stations.columns:
+        ax.scatter(
+            stations.geometry.x,
+            stations.geometry.y,
+            s=size,
+            color="crimson",
+            edgecolors="white",
+            linewidths=0.4,
+            alpha=alpha,
+            zorder=10,
+            label="Stations",
+        )
+        if show_legend:
+            ax.legend(loc="lower left", fontsize=8, frameon=True)
+        return
+
+    categories = list(stations[color_by].dropna().unique())
+
+    # Minimal fixed palette for the current two-source station inventory.
+    palette = {
+        "ghcnd": "tab:blue",
+        "isd": "tab:red",
+    }
+
+    for category in categories:
+        subset = stations[stations[color_by] == category]
+
+        ax.scatter(
+            subset.geometry.x,
+            subset.geometry.y,
+            s=size,
+            color=palette.get(category, "black"),
+            edgecolors="white",
+            linewidths=0.4,
+            alpha=alpha,
+            zorder=10,
+            label=str(category),
+        )
+
+    if show_legend:
+        ax.legend(loc="lower left", fontsize=8, frameon=True, title=color_by)
