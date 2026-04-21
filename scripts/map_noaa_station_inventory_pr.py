@@ -35,10 +35,11 @@ from pr_ngvla.config import (
 )
 from pr_ngvla.data.spatial import load_vector_data
 from pr_ngvla.visualization.maps import (
+    add_north_arrow,
+    finalize_station_inventory_figure,
     mask_ocean,
     plot_base_map,
-    plot_station_inventory_map,
-    style_axes_single,
+    style_station_inventory_axes,
 )
 
 
@@ -73,6 +74,49 @@ def _load_station_geodataframe(csv_path) -> gpd.GeoDataFrame:
     return gdf
 
 
+def _plot_stations_by_source(ax, stations: gpd.GeoDataFrame) -> None:
+    """
+    Plot stations grouped by source using the established NOAA map style.
+    """
+    color_map = {
+        "ghcnd": "#1f77b4",  # blue
+        "isd": "#d62728",    # red
+    }
+
+    if "source" not in stations.columns:
+        ax.scatter(
+            stations.geometry.x,
+            stations.geometry.y,
+            s=22,
+            marker="o",
+            color="#1f77b4",
+            edgecolors="white",
+            linewidths=0.4,
+            zorder=10,
+            label="station",
+        )
+        ax.legend(title="source", loc="lower left", frameon=True)
+        return
+
+    sources = stations["source"].astype(str).str.strip().str.lower().fillna("unknown")
+
+    for source_name in sorted(sources.unique()):
+        sub = stations.loc[sources.eq(source_name)]
+        ax.scatter(
+            sub.geometry.x,
+            sub.geometry.y,
+            s=22,
+            marker="o",
+            color=color_map.get(source_name, "#1f77b4"),
+            edgecolors="white",
+            linewidths=0.4,
+            zorder=10,
+            label=source_name,
+        )
+
+    ax.legend(title="source", loc="lower left", frameon=True)
+
+
 def _make_station_map(
     stations: gpd.GeoDataFrame,
     title: str,
@@ -99,7 +143,7 @@ def _make_station_map(
     muni_land_union : shapely geometry
         Dissolved municipality land polygon used for ocean masking.
     """
-    fig, ax = plt.subplots(figsize=(12, 7))
+    fig, ax = plt.subplots(figsize=(14, 4.5), dpi=150)
 
     # Paint ocean white using the project-standard municipality land mask.
     mask_ocean(ax, muni_land_union)
@@ -108,14 +152,13 @@ def _make_station_map(
     plot_base_map(ax, coast_union=coast_union, muni_clip=muni_clip)
 
     # Overlay stations by source.
-    plot_station_inventory_map(ax, stations, color_by="source")
+    _plot_stations_by_source(ax, stations)
 
     # Apply standard standalone map styling.
-    style_axes_single(ax)
-    ax.set_title(title, fontsize=18)
+    style_station_inventory_axes(ax, title=title)
+    add_north_arrow(ax)
 
-    fig.tight_layout()
-    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    finalize_station_inventory_figure(fig, output_path)
     plt.close(fig)
 
 

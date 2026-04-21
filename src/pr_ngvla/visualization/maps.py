@@ -312,6 +312,48 @@ def add_north_arrow(
     )
 
 
+def style_station_inventory_axes(
+    ax,
+    *,
+    title: str,
+    x_lim: tuple = MAP_XLIM,
+    y_lim: tuple = MAP_YLIM,
+) -> None:
+    """
+    Style a standalone station-inventory map using the project house format.
+
+    House standard
+    --------------
+    - Same base styling as the NOAA GHCND/ISD inventory maps
+    - Includes degree-minute ticks via style_axes_single()
+    - Smaller title pad and axis label pad to reduce wasted whitespace
+    - Intended for poster-ready exports
+    """
+    style_axes_single(ax, x_lim=x_lim, y_lim=y_lim)
+
+    # Keep the NOAA map look, but tighten spacing.
+    ax.set_xlabel("Longitude", fontsize=11, labelpad=4)
+    ax.set_ylabel("Latitude", fontsize=11, labelpad=4)
+    ax.set_title(title, fontsize=22, pad=6)
+
+
+def finalize_station_inventory_figure(fig, out_path) -> None:
+    """
+    Apply tight outer spacing and save a station-inventory figure.
+
+    This reduces the excess whitespace above the title and below the x-axis
+    label so the exported PNG can be pasted into the poster without manual
+    cropping.
+    """
+    fig.subplots_adjust(
+        left=0.055,
+        right=0.995,
+        top=0.90,
+        bottom=0.12,
+    )
+    fig.savefig(out_path, bbox_inches="tight", pad_inches=0.03)
+
+
 # ---------------------------------------------------------------------------
 # DEM background
 # ---------------------------------------------------------------------------
