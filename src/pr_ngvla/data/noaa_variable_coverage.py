@@ -605,7 +605,7 @@ def build_noaa_variable_coverage_wide(long_df: pd.DataFrame) -> pd.DataFrame:
         if avail_col not in base.columns:
             base[avail_col] = False
         else:
-            base[avail_col] = base[avail_col].fillna(False)
+            base[avail_col] = base[avail_col].astype("boolean").fillna(False).astype(bool)
 
     base["n_variables_available"] = (
         base[[f"{v}_available" for v in CANONICAL_VARIABLES]]
@@ -642,5 +642,463 @@ def summarize_variable_coverage(long_df: pd.DataFrame) -> pd.DataFrame:
             n_prelim_usable=("prelim_usable", "sum"),
         )
         .sort_values(["source", "variable"], kind="stable")
+        .reset_index(drop=True)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Mixed-resolution validation framework
+# ---------------------------------------------------------------------------
+
+HOURLY_CORE_VARIABLES: tuple[str, ...] = (
+    "temperature",
+    "dewpoint_rh",
+    "wind",
+)
+
+DAILY_BROAD_ACCEPTED_VARIABLES: tuple[str, ...] = (
+    "temperature",
+    "precipitation",
+)
+
+DAILY_BROAD_CONDITIONAL_VARIABLES: tuple[str, ...] = (
+    "wind",
+)
+
+
+def mixed_validation_long_columns() -> list[str]:
+    """
+    Standard output schema for the mixed-resolution validation framework.
+
+    This is distinct from the NOAA metadata audit table above:
+    - `prelim_usable` remains the metadata-driven eligibility flag.
+    - `selector_status` records whether a variable is accepted or conditional.
+    - `selector_selected` is the final station-selector decision for the current
+      workflow stage.
+    """
+    return [
+        "station_id",
+        "source",
+        "validation_tier",
+        "variable",
+        "native_datatype",
+        "native_timescale",
+        "start_year",
+        "end_year",
+        "years_with_data",
+        "study_overlap",
+        "prelim_usable",
+        "selector_status",
+        "selector_selected",
+        "notes",
+    ]
+
+
+def standardize_ghcnh_master_inventory(
+    ghcnh_master_inventory: pd.DataFrame,
+    *,
+    study_start_year: int = STUDY_YEAR_START,
+    study_end_year: int = STUDY_YEAR_END,
+) -> pd.DataFrame:
+    """
+    Standardize the validation-ready GHCNh master inventory.
+
+    Accepted aliases
+    ---------------
+    - station id: station_id / id
+    - source: source
+    - years: start_year / end_year
+
+    Optional columns carried through if present
+    -------------------------------------------
+    - years_with_data
+    - study_overlap
+    - prelim_usable
+
+    Missing optional fields are derived conservatively from start/end year.
+    """
+    df = normalize_columns(ghcnh_master_inventory)
+
+    station_id_col = pick_first_present(
+        df,
+        ("station_id", "id"),
+        context="GHCNh master inventory station id",
+    )
+    source_col = pick_first_present(
+        df,
+        ("source",),
+        context="GHCNh master inventory source",
+    )
+    start_year_col = pick_first_present(
+        df,
+        ("start_year",),
+        context="GHCNh master inventory start year",
+    )
+    end_year_col = pick_first_present(
+        df,
+        ("end_year",),
+        context="GHCNh master inventory end year",
+    )
+
+    out = df.rename(
+        columns={
+            station_id_col: "station_id",
+            source_col: "source",
+            start_year_col: "start_year",
+            end_year_col: "end_year",
+        }
+    ).copy()
+
+    out["station_id"] = out["station_id"].astype(str).str.strip()
+    out["source"] = out["source"].astype(str).str.strip().str.lower()
+    out["start_year"] = coerce_nullable_int(out["start_year"])
+    out["end_year"] = coerce_nullable_int(out["end_year"])
+
+    if "years_with_data" in out.columns:
+        out["years_with_data"] = coerce_nullable_int(out["years_with_data"])
+    else:
+        out["years_with_data"] = overlap_year_count(
+            out["start_year"],
+            out["end_year"],
+            study_start_year=study_start_year,
+            study_end_year=study_end_year,
+        )
+
+    if "study_overlap" in out.columns:
+        out["study_overlap"] = out["study_overlap"].fillna(False).astype(bool)
+    else:
+        out["study_overlap"] = has_year_overlap(
+            out["start_year"],
+            out["end_year"],
+            study_start_year=study_start_year,
+            study_end_year=study_end_year,
+        )
+
+    if "prelim_usable" in out.columns:
+        out["prelim_usable"] = out["prelim_usable"].fillna(False).astype(bool)
+    else:
+        out["prelim_usable"] = out["study_overlap"]
+
+    return (
+        out[
+            [
+                "station_id",
+                "source",
+                "start_year",
+                "end_year",
+                "years_with_data",
+                "study_overlap",
+                "prelim_usable",
+            ]
+        ]
+        .drop_duplicates()
+        .sort_values(["source", "station_id"], kind="stable")
+        .reset_index(drop=True)
+    )
+
+
+
+def build_ghcnh_hourly_validation_long(
+    ghcnh_master_inventory: pd.DataFrame,
+    *,
+    study_start_year: int = STUDY_YEAR_START,
+    study_end_year: int = STUDY_YEAR_END,
+) -> pd.DataFrame:
+    """
+    Build the hourly-core validation selector rows from the GHCNh master subset.
+
+    Current workflow decision
+    -------------------------
+    Accepted hourly-core variables are:
+    - temperature
+    - dewpoint_rh
+    - wind
+
+    Hourly precipitation is intentionally deferred until later observation-level
+    population checks confirm that it is truly usable.
+    """
+    master = standardize_ghcnh_master_inventory(
+        ghcnh_master_inventory,
+        study_start_year=study_start_year,
+        study_end_year=study_end_year,
+    )
+    master = master[master["source"] == "ghcnh"].copy()
+
+    if master.empty:
+        return pd.DataFrame(columns=mixed_validation_long_columns())
+
+    rows: list[pd.DataFrame] = []
+    for variable in HOURLY_CORE_VARIABLES:
+        tmp = master.copy()
+        tmp["validation_tier"] = "hourly_core"
+        tmp["variable"] = variable
+        tmp["native_datatype"] = "ghcnh_station_year_obs_count"
+        tmp["native_timescale"] = "hourly"
+        tmp["selector_status"] = "accepted"
+        tmp["selector_selected"] = tmp["prelim_usable"].fillna(False).astype(bool)
+        tmp["notes"] = pd.NA
+        rows.append(tmp[mixed_validation_long_columns()])
+
+    out = pd.concat(rows, ignore_index=True)
+    return (
+        out.sort_values(
+            ["source", "validation_tier", "station_id", "variable"],
+            kind="stable",
+        )
+        .reset_index(drop=True)
+    )
+
+
+
+def build_ghcnd_daily_validation_long(
+    ghcnd_master_inventory: pd.DataFrame,
+    ghcnd_inventory: pd.DataFrame,
+    *,
+    study_start_year: int = STUDY_YEAR_START,
+    study_end_year: int = STUDY_YEAR_END,
+    include_daily_wind: bool = False,
+) -> pd.DataFrame:
+    """
+    Build the daily-broad validation selector rows from the GHCND branch.
+
+    Current workflow decision
+    -------------------------
+    Accepted daily-broad variables are:
+    - temperature
+    - precipitation
+
+    Daily wind is retained only as a conditional candidate because the project
+    has not yet frozen the scientific/product-level decision that it should be
+    included in the default daily validation branch.
+    """
+    base = build_ghcnd_variable_coverage(
+        master_inventory=ghcnd_master_inventory,
+        ghcnd_inventory=ghcnd_inventory,
+        study_start_year=study_start_year,
+        study_end_year=study_end_year,
+    )
+
+    if base.empty:
+        return pd.DataFrame(columns=mixed_validation_long_columns())
+
+    rows: list[pd.DataFrame] = []
+
+    accepted = base[base["variable"].isin(DAILY_BROAD_ACCEPTED_VARIABLES)].copy()
+    if not accepted.empty:
+        accepted["validation_tier"] = "daily_broad"
+        accepted["selector_status"] = "accepted"
+        accepted["selector_selected"] = accepted["prelim_usable"].fillna(False).astype(bool)
+        accepted["notes"] = pd.NA
+        rows.append(accepted[mixed_validation_long_columns()])
+
+    conditional = base[base["variable"].isin(DAILY_BROAD_CONDITIONAL_VARIABLES)].copy()
+    if not conditional.empty:
+        conditional["validation_tier"] = "daily_broad"
+        conditional["selector_status"] = "accepted" if include_daily_wind else "conditional"
+        conditional["selector_selected"] = (
+            conditional["prelim_usable"].fillna(False).astype(bool)
+            if include_daily_wind
+            else False
+        )
+        conditional["notes"] = (
+            pd.NA
+            if include_daily_wind
+            else "Daily wind remains conditional until the station-definition/product decision is frozen."
+        )
+        rows.append(conditional[mixed_validation_long_columns()])
+
+    if not rows:
+        return pd.DataFrame(columns=mixed_validation_long_columns())
+
+    out = pd.concat(rows, ignore_index=True)
+    return (
+        out.sort_values(
+            ["source", "validation_tier", "station_id", "variable"],
+            kind="stable",
+        )
+        .reset_index(drop=True)
+    )
+
+
+
+def build_mixed_resolution_validation_long(
+    *,
+    ghcnh_master_inventory: pd.DataFrame,
+    ghcnd_master_inventory: pd.DataFrame,
+    ghcnd_inventory: pd.DataFrame,
+    study_start_year: int = STUDY_YEAR_START,
+    study_end_year: int = STUDY_YEAR_END,
+    include_daily_wind: bool = False,
+) -> pd.DataFrame:
+    """
+    Build the mixed-resolution validation framework table.
+
+    The resulting table is the project-facing selector product:
+    - GHCNh = hourly-capable validation core
+    - GHCND = daily-capable broad validation layer
+
+    Legacy ISD remains available in the NOAA audit products, but it is not the
+    default selector source in this mixed-resolution framework.
+    """
+    hourly = build_ghcnh_hourly_validation_long(
+        ghcnh_master_inventory=ghcnh_master_inventory,
+        study_start_year=study_start_year,
+        study_end_year=study_end_year,
+    )
+    daily = build_ghcnd_daily_validation_long(
+        ghcnd_master_inventory=ghcnd_master_inventory,
+        ghcnd_inventory=ghcnd_inventory,
+        study_start_year=study_start_year,
+        study_end_year=study_end_year,
+        include_daily_wind=include_daily_wind,
+    )
+
+    out = pd.concat([hourly, daily], ignore_index=True)
+    if out.empty:
+        return pd.DataFrame(columns=mixed_validation_long_columns())
+
+    return (
+        out.sort_values(
+            ["source", "validation_tier", "station_id", "variable"],
+            kind="stable",
+        )
+        .reset_index(drop=True)
+    )
+
+
+
+def build_mixed_resolution_validation_wide(long_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Convert the mixed-resolution validation table to selector-style rows.
+
+    Output shape
+    ------------
+    One row per (source, station_id, validation_tier) with tier-variable fields:
+    - <tier>_<variable>_eligible
+    - <tier>_<variable>_selected
+    - <tier>_<variable>_status
+    - <tier>_<variable>_start_year
+    - <tier>_<variable>_end_year
+    - n_selected_variables
+    """
+    df = normalize_columns(long_df)
+
+    require_columns(
+        df,
+        required={
+            "station_id",
+            "source",
+            "validation_tier",
+            "variable",
+            "prelim_usable",
+            "selector_status",
+            "selector_selected",
+            "start_year",
+            "end_year",
+        },
+        context="mixed-resolution validation long table",
+    )
+
+    base = (
+        df[["source", "station_id", "validation_tier"]]
+        .drop_duplicates()
+        .sort_values(["source", "validation_tier", "station_id"], kind="stable")
+        .reset_index(drop=True)
+    )
+
+    combos = (
+        df[["validation_tier", "variable"]]
+        .drop_duplicates()
+        .sort_values(["validation_tier", "variable"], kind="stable")
+        .itertuples(index=False, name=None)
+    )
+
+    for validation_tier, variable in combos:
+        sub = df[
+            (df["validation_tier"] == validation_tier)
+            & (df["variable"] == variable)
+        ].copy()
+
+        prefix = f"{validation_tier}_{variable}"
+        sub = sub.rename(
+            columns={
+                "prelim_usable": f"{prefix}_eligible",
+                "selector_selected": f"{prefix}_selected",
+                "selector_status": f"{prefix}_status",
+                "start_year": f"{prefix}_start_year",
+                "end_year": f"{prefix}_end_year",
+            }
+        )
+
+        base = base.merge(
+            sub[
+                [
+                    "source",
+                    "station_id",
+                    "validation_tier",
+                    f"{prefix}_eligible",
+                    f"{prefix}_selected",
+                    f"{prefix}_status",
+                    f"{prefix}_start_year",
+                    f"{prefix}_end_year",
+                ]
+            ],
+            on=["source", "station_id", "validation_tier"],
+            how="left",
+        )
+
+    eligible_cols = [c for c in base.columns if c.endswith("_eligible")]
+    selected_cols = [c for c in base.columns if c.endswith("_selected")]
+
+    for col in eligible_cols + selected_cols:
+        base[col] = base[col].astype("boolean").fillna(False).astype(bool)
+
+    base["n_selected_variables"] = base[selected_cols].astype(int).sum(axis=1)
+
+    return (
+        base.sort_values(["source", "validation_tier", "station_id"], kind="stable")
+        .reset_index(drop=True)
+    )
+
+
+
+def summarize_mixed_resolution_validation(long_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Build a compact QC table for the mixed-resolution selector framework.
+
+    Returns one row per source-tier-variable-status with:
+    - n_station_variable_rows
+    - n_prelim_usable
+    - n_selected
+    """
+    df = normalize_columns(long_df)
+
+    require_columns(
+        df,
+        required={
+            "source",
+            "validation_tier",
+            "variable",
+            "selector_status",
+            "prelim_usable",
+            "selector_selected",
+        },
+        context="mixed-resolution validation summary",
+    )
+
+    return (
+        df.groupby(
+            ["source", "validation_tier", "variable", "selector_status"],
+            as_index=False,
+        )
+        .agg(
+            n_station_variable_rows=("station_id", "count"),
+            n_prelim_usable=("prelim_usable", "sum"),
+            n_selected=("selector_selected", "sum"),
+        )
+        .sort_values(
+            ["source", "validation_tier", "variable", "selector_status"],
+            kind="stable",
+        )
         .reset_index(drop=True)
     )
