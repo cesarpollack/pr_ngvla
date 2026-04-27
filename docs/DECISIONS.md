@@ -1,289 +1,616 @@
-# DECISIONS.md
-# ngVLA Puerto Rico — Scientific and Methodological Decisions
-# Last updated: April 9, 2026
-# Author: César Pollack, UPR Río Piedras
-#
-# PURPOSE: Document every non-trivial decision made in this project.
-# Each entry answers: What did we decide? Why? What are the alternatives?
-# How do we defend this in front of the committee?
-#
-# This document is the scientific backbone of the final report.
+# Methodological decisions for PR-ngVLA
+
+**Project:** PR-ngVLA
+**Current workflow stage:** GHCNh hourly clean core
+**Study period:** 2004-2023
+**Last updated:** April 2026
 
 ---
 
-## D01 — Scientific Framing (CRITICAL — never violate)
+## 1. Purpose
 
-**Decision:** Puerto Rico IS part of the ngVLA project. The study does NOT
-evaluate whether PR qualifies. The goal is to identify the BEST REGIONS
-within Puerto Rico for antenna placement.
+This document records methodological decisions that are currently frozen or should be treated as active guidance for the PR-ngVLA workflow.
 
-**Rationale:** PR is already included in the ngVLA design. The conclusion
-will ALWAYS be "these regions are better than others" — never "PR is not
-suitable."
+The current active workflow stage is:
 
-**Terminology:** Use "site selection index" — never "suitability index."
-The word "suitability" implies a pass/fail judgment that is scientifically
-and politically inappropriate for this study.
+```text
+GHCNh hourly clean core: strict QC + no-threshold coverage tables
+```
 
-**When RH/PWV exceedance is high:** Frame as "this quantifies the
-atmospheric correction requirements — antennas in PR will require water
-vapor radiometry and phase correction techniques. The SW region minimizes
-this impact."
+The current technical reference is:
 
-**Reference:** Narrativocientifico.pdf (project knowledge)
+```text
+docs/GHCNH_HOURLY_CLEAN_CORE.md
+```
 
----
+The current reproducing guide is:
 
-## D02 — Study Period: 2004–2023 (20 years)
-
-**Decision:** Use ERA5-Land data from 2004 to 2023 inclusive.
-
-**Rationale:** 20 years is the standard climatological period for site
-characterization studies. ERA5-Land is available from 1950, but we chose
-2004 to ensure data quality consistency post-satellite era and to have
-clean data on both sides of Hurricane Maria (2017).
-
-**Hurricane Maria exclusion:** Months 2017-09 through 2018-06 are
-excluded from exceedance calculations. Maria destroyed ground stations
-that were assimilated into ERA5, potentially degrading data quality
-for that period.
-
-**Alternative considered:** 2000–2023 (longer period). Rejected because
-ERA5-Land quality before 2004 is slightly lower due to fewer assimilated
-observations.
+```text
+docs/REPRODUCING.md
+```
 
 ---
 
-## D03 — Primary Dataset: ERA5-Land at 0.1° (~9 km)
+## 2. Current primary observational dataset
 
-**Decision:** Use ERA5-Land as the primary dataset for all surface
-meteorological variables (t2m, d2m, u10, v10, tp, sp).
+### Decision
 
-**Rationale:**
-- Highest resolution publicly available reanalysis for land surfaces
-- Globally validated by Muñoz-Sabater et al. (2021)
-- Hourly temporal resolution matches ngVLA operational requirements
-- Consistent with methodology used in other astronomical site
-  characterization studies (Bi et al. 2024, MNRAS)
+NOAA GHCNh hourly is the current primary observational station dataset for Puerto Rico.
 
-**Reference:** Muñoz-Sabater et al. (2021), ESSD 13:4349-4383
+### Rationale
 
----
+GHCNh replaces the legacy Global Hourly / Integrated Surface Dataset product and provides hourly station-year files with variable-specific metadata fields.
 
-## D04 — PWV Source: ERA5 Single-Levels
+The project needs a clean, physically meaningful observational station record before comparing with ERA5 or any other reanalysis product.
 
-**Decision:** Use ERA5 single-levels (0.25°) for PWV/TCWV instead of
-ERA5-Land.
+### Consequence
 
-**Rationale:** ERA5-Land does not include total column water vapor (TCWV).
-ERA5 single-levels provides this variable and has been validated for PWV
-against GNSS and radiosondes with correlation >0.99 (Zhang et al. 2019).
-
-**Reference:** Zhang et al. (2019), Radio Science 54:561-571
+Older NOAA ISD-specific workflows are historical context only unless explicitly reintroduced.
 
 ---
 
-## D05 — Thresholds: Selina et al. (2020) + Linford & Cooper (2023)
+## 3. Study period
 
-**Decision:** Use thresholds from ngVLA System Environmental Specification
-(Selina et al. 2020) and ngVLA Memo 117 (Linford & Cooper 2023).
+### Decision
 
-| Variable | Good threshold | Source |
-|---|---|---|
-| PWV | ≤ 6 mm | ENV0316 (Precision) |
-| RH | ≤ 50% | Memo 117 Table 2 |
-| Precip | 0 mm/hr (use >1 mm/hr for ERA5) | Memo 117 |
-| Wind | ≤ 9 m/s | Memo 117 Table 2 |
-| T−Td | ≥ 2°C | Memo 117 Table 2 |
+The current clean-core workflow uses:
 
-**ERA5 precipitation note:** ERA5 generates numerical drizzle — threshold
-> 0 mm/hr gives unphysical 93% exceedance. Use > 1 mm/hr and > 7.6 mm/hr
-only. Bias affects all pixels uniformly — does NOT distort spatial ranking.
+```text
+2004-2023
+```
 
----
+### Rationale
 
-## D06 — Validation: ERA5 vs NOAA ISD (5 stations)
+This provides a 20-year hourly observational period while keeping the workflow computationally manageable and consistent with the current project stage.
 
-**Decision:** Validate ERA5-Land against 5 NOAA ISD stations for RH
-and wind. No hourly station data available for precip or PWV in PR.
+### Consequence
 
-**Known limitation:** All 5 stations are coastal and at airports. No
-mountain stations exist in the Cordillera Central.
-
-**Defense:** ERA5-Land global validation (Muñoz-Sabater et al. 2021)
-compensates. Our regional validation adds specificity for PR's complex
-topographic and climatic setting. RH MBE < 3%, wind MBE < 1.2 m/s.
-
-**Standard answer for committee:** "Regional validation adds specificity
-that global validation cannot provide. For precip and PWV, we rely on
-global validation and spatial comparison with PRISM (independent 450m
-climatology)."
+All coverage summaries and clean-core outputs should clearly state that they refer to 2004-2023.
 
 ---
 
-## D07 — Site Selection Index: Equal Weights (Fuzzy-Logic)
+## 4. Do not advance with physically inconsistent data
 
-**Decision:** Use equal weights (0.25 each) for RH, wind, precip, and
-PWV in the composite site selection index.
+### Decision
 
-**Membership function:** Linear — suitability = 1 - exceedance_fraction.
+If the data do not make physical or methodological sense, the workflow stops and the data problem is investigated before proceeding.
 
-**Rationale:** No MCDA weights have been formally assigned for ngVLA.
-Equal weights are the scientifically conservative choice for the poster.
-Sensitivity analysis across weight sets is planned for Phase 4 (Monte Carlo).
+### Rationale
 
-**Defense:** "Equal weights represent the maximum entropy prior — no
-variable is assumed more important than others without empirical evidence.
-This is the appropriate baseline before Phase 4 sensitivity analysis."
+Carrying an error into downstream analysis is worse than moving slowly. The project should not advance merely to “get results.”
 
-**Alternative:** Data-driven weights from NOAA ISD stations. Rejected
-for poster because 5 stations are insufficient for robust weight estimation.
+### Consequence
+
+Suspicious values must be checked against physical plausibility, GHCNh metadata, and source-specific documentation before they are used.
 
 ---
 
-## D08 — ERA5-SL Gap-Fill for Coastal Pixels
+## 5. Avoid unnecessary workflow fragmentation
 
-**Decision:** Use ERA5 single-levels (0.25°) to fill coastal NaN pixels
-in ERA5-Land exceedance climatologies.
+### Decision
 
-**Scientific justification:** ERA5-Land assigns NaN to coastal pixels
-where land fraction is below an internal threshold (~9 km pixels). ERA5-SL
-uses a different land-sea mask and recovers partial coverage. Both products
-derive from the same ECMWF IFS system and are physically consistent.
+Do not create a new script for every small review or correction.
 
-**Key finding during implementation:** ERA5-SL pixels with low land
-fraction produce artifically low precipitation exceedance values because
-they mix terrestrial and marine signals. This can distort the site
-selection index.
+### Rationale
 
-**Solution — Land fraction threshold of 60%:**
-Only ERA5-SL pixels where ≥60% of the 0.25° pixel area falls within
-PR municipality boundaries are used for gap-fill. This eliminates the
-problematic northern coastal fringe (lat 18.55°) and all southern
-coastal pixels (lat 17.80°).
+Too many narrowly scoped scripts make the workflow difficult to trace, reproduce, and explain.
 
-**Threshold justification:** 60% is more conservative than the 40%
-commonly used in regional downscaling literature (Nacar et al. 2022).
-Chosen to ensure gap-fill pixels are clearly terrestrial.
+### Consequence
 
-**Remaining limitation:** Lajas and Guánica (lat ~17.97°N) remain NaN
-because no ERA5-SL pixel at 17.80° has sufficient land fraction (max
-24%). This is documented as a limitation and identified as future work.
+If the needed change is a correction to an existing central stage, update the central script rather than creating a parallel script.
 
-**Provenance mask:** A NetCDF file (`provenance_mask.nc`) records for
-each pixel: 0=ocean/no data, 1=ERA5-Land, 2=ERA5-SL gap-fill.
+Creating a new script is appropriate only when it represents a reproducible workflow stage, such as:
 
-**Interpolation method:** Bilinear (xr.DataArray.interp, method="linear").
-Same method used in ERA5-Land production (Muñoz-Sabater et al. 2021).
-
-**Reference:** Muñoz-Sabater et al. (2021); Hersbach et al. (2020)
+```text
+build_ghcnh_hourly_clean_core_pr.py
+build_ghcnh_hourly_clean_core_coverage_tables_pr.py
+```
 
 ---
 
-## D09 — PRISM as Independent Validation
+## 6. GHCNh clean core is conservative
 
-**Decision:** Use PRISM precipitation normals (1963-1995, 450m) as
-independent spatial validation of ERA5 precipitation patterns.
+### Decision
 
-**Rationale:** PRISM is an independent dataset derived from station
-observations with high spatial resolution. Agreement between ERA5 and
-PRISM strengthens confidence in ERA5 spatial patterns.
+The clean core prioritizes defensibility over maximizing retained data volume.
 
-**Limitation:** PRISM confirmed they will NOT update PR normals
-(indefinitely on hold). Period mismatch: PRISM 1963-1995 vs ERA5 2004-2023.
-Used for spatial pattern validation only — not quantitative comparison.
+### Rationale
 
----
+The cleaned observational dataset will be used as a reference for later comparison with reanalysis products. It must be physically meaningful and explainable.
 
-## D10 — DEM Downscaling: Deferred to Phase 4
+### Consequence
 
-**Decision:** Lapse rate correction for temperature and pressure fields
-(0.65°C per 100m elevation) is deferred to Phase 4 (May 2026).
-
-**Rationale:** Not needed for poster results. Monthly mean temperature
-passes Normal Operations range at all elevations without correction.
-DEM downscaling adds value for Phase 4 site ranking but is not critical
-for Phase 3 site selection index.
+Values are excluded when they are physically unreasonable, marked with suspect/error quality information, or methodologically ambiguous.
 
 ---
 
-## D11 — Hurricane Maria Exclusion
+## 7. No suspect QC retained
 
-**Decision:** Exclude months 2017-09 through 2018-06 from all hourly
-exceedance calculations.
+### Decision
 
-**Rationale:** Maria destroyed ground stations that feed ERA5 assimilation.
-Data quality for PR during this period is reduced. Exclusion removes
-9 months from a 20-year record — negligible impact on climatology.
+No variable keeps values marked as suspect QC.
 
-**Implementation:** `MARIA_START = "2017-09"`, `MARIA_END = "2018-06"`
-in config.py. Applied in all Phase 2 exceedance scripts.
+This applies to:
 
----
+```text
+temperature
+dew_point_temperature
+relative_humidity
+wind_speed
+station_level_pressure
+precipitation
+```
 
-## D12 — Terminology Decisions
+### Rationale
 
-| Avoid | Use instead | Reason |
-|---|---|---|
-| "suitability index" | "site selection index" | No pass/fail implied |
-| "suitable/unsuitable" | "more/less favorable" | Scientific framing |
-| "Puerto Rico qualifies/fails" | "SW corridor is most favorable" | Correct framing |
-| "limitation" alone | "limitation → future work" | Shows path forward |
+Previous diagnostics showed that some suspect-QC values were physically implausible or inconsistent with Puerto Rico climatology.
 
----
+### Consequence
 
-## D13 — Key Results for Poster and Committee
-
-**Phase 1 — Monthly Climatology:**
-- Temperature: 21.2–27.8°C — all within Normal Operations (no discriminating power)
-- RH: 67.7–87.2% — Questionable tier most of the year
-- T−Td: 2.28–6.37°C — all above 2°C Good threshold (promising)
-- Wind: 1.25–4.96 m/s — excellent, well below 9 m/s threshold
-- Precipitation: SW corridor consistently driest year-round
-- PWV: 26.1–46.7 mm — entire PR above 6 mm Good threshold year-round
-
-**Phase 2 — Exceedance:**
-- RH > 50%: 97.9% of hours — quantifies atmospheric correction need
-- Wind > 9 m/s: ~0% — wind not a discriminating variable
-- Precip > 1 mm/hr: 25.4% — SW corridor lowest
-- PWV > 26 mm: 90.2% — Jan–Mar SW drops to ~50%
-
-**Phase 3 — Site Selection Index:**
-- Best municipalities (ERA5-Land): San Germán, Yauco, Lares, Las Marías,
-  Guayanilla, Adjuntas, Peñuelas, Utuado, Jayuya, Mayagüez
-- Best temporal window: January–March (dry season)
-- Best pixel: San Germán (index=0.5153, annual mean)
-- February is the best month across all top municipalities
+Suspect-QC values are recorded in the decision summary as dropped, not retained in the final clean variable columns.
 
 ---
 
-## Standard Answers for Common Questions
+## 8. Strong QC errors are dropped
 
-**"Why validate if ERA5 is already globally validated?"**
-Regional validation adds specificity for PR's complex topographic and
-climatic setting. Our validation confirms ERA5 behavior in PR with known
-biases documented. MBE < 3% for RH, < 1.2 m/s for wind.
+### Decision
 
-**"PWV/RH is very high — does that disqualify PR?"**
-No. The study identifies BEST REGIONS within PR. High PWV quantifies
-atmospheric correction requirements for millimeter-wave observations —
-standard practice for tropical radio telescope sites. The SW region and
-dry season minimize this impact. Water vapor radiometers and phase
-correction are established solutions (Nikolic et al. 2013).
+Values marked with strong quality-code errors are excluded from the clean core.
 
-**"Why only 5 validation stations?"**
-These are the only NOAA ISD stations with continuous hourly records in
-PR during our study period. All are coastal — a recognized limitation.
-ERA5-Land global validation and agreement with PRISM partially compensates.
+### Rationale
 
-**"What about Lajas and Guánica?"**
-ERA5-Land (0.1°) does not resolve these coastal municipalities with
-sufficient land fraction. ERA5-SL gap-fill with 60% land fraction
-threshold cannot recover them either (max land fraction 24% at 17.80°N).
-Identified as future work: higher resolution reanalysis or WRF downscaling.
+The GHCNh metadata fields are essential for interpreting whether an observation is usable.
 
-**"Why equal weights?"**
-Equal weights represent the maximum entropy prior — no variable is assumed
-more important without empirical evidence. This is the appropriate
-baseline. Phase 4 Monte Carlo sensitivity analysis will explore the
-impact of different weight sets on site ranking.
+### Consequence
+
+Numeric plausibility alone is not enough. A value can be physically plausible but still excluded if its QC metadata indicates a strong error.
+
+---
+
+## 9. Metadata fields are mandatory for interpretation
+
+### Decision
+
+GHCNh numeric values must be interpreted together with their metadata fields:
+
+```text
+variable_Measurement_Code
+variable_Quality_Code
+variable_Report_Type
+variable_Source_Code
+variable_Source_Station_ID
+```
+
+### Rationale
+
+The same numeric value can mean different things depending on source, measurement code, report type, and quality code.
+
+### Consequence
+
+The clean-core workflow should not use numeric ranges alone to decide whether a value is valid.
+
+---
+
+## 10. Temperature range for Puerto Rico
+
+### Decision
+
+The clean-core physical cleaning range for air temperature is:
+
+```text
+4.0 <= temperature <= 41.0 °C
+```
+
+### Rationale
+
+Values near 0 °C are not reasonable for Puerto Rico in this context and should not be treated as acceptable clean observations.
+
+### Consequence
+
+Values below 4 °C are excluded from the clean core. After strict QC, the retained clean temperature range is:
+
+```text
+14.0-40.0 °C
+```
+
+---
+
+## 11. Temperature and dew point scaling
+
+### Decision
+
+For temperature-like variables, division by 10 is allowed only when the raw value appears clearly encoded in tenths:
+
+```text
+abs(raw) >= 100
+```
+
+### Rationale
+
+Some raw values such as 227 or 340 plausibly represent 22.7 °C or 34.0 °C. However, values like 42.2 °C should not be divided by 10 into 4.22 °C.
+
+### Consequence
+
+The workflow avoids incorrectly converting suspicious but nearby values into apparently valid low temperatures.
+
+---
+
+## 12. Dew point cannot exceed air temperature
+
+### Decision
+
+If dew point temperature exceeds air temperature by more than 0.5 °C, temperature, dew point, and relative humidity are removed for that record/hour.
+
+### Rationale
+
+Dew point greater than air temperature is physically inconsistent except for very small measurement or rounding differences.
+
+NOAA hourly normals methodology also treats dew point greater than temperature as invalid before computing normals.
+
+### Consequence
+
+The final clean core must satisfy:
+
+```text
+Td > T + 0.5 C: 0
+```
+
+---
+
+## 13. Relative humidity limits
+
+### Decision
+
+Relative humidity must remain within:
+
+```text
+1 <= relative_humidity <= 100 %
+```
+
+### Rationale
+
+Relative humidity outside this interval is physically invalid for this workflow.
+
+### Consequence
+
+Values such as extremely large RH artifacts are excluded from the clean core.
+
+The final clean core must satisfy:
+
+```text
+RH < 1: 0
+RH > 100: 0
+```
+
+---
+
+## 14. Wind speed range
+
+### Decision
+
+The clean-core physical cleaning range for wind speed is:
+
+```text
+0.0 <= wind_speed <= 50.0 m/s
+```
+
+### Rationale
+
+A retained value of 60.7 m/s was found in `wind_speed` rather than `wind_gust`. Although it passed source QC, it was not appropriate to keep as a clean hourly representative wind-speed value for this project.
+
+### Consequence
+
+The 60.7 m/s value is excluded as out of range. The final clean wind-speed maximum is:
+
+```text
+31.4 m/s
+```
+
+The final clean core must satisfy:
+
+```text
+Wind > 50 m/s: 0
+```
+
+---
+
+## 15. Station-level pressure handling
+
+### Decision
+
+Station-level pressure is retained within a broad physical range:
+
+```text
+850.0 <= station_level_pressure <= 1050.0 hPa
+```
+
+### Rationale
+
+Station pressure depends on station elevation and should not be treated the same as sea-level pressure.
+
+### Consequence
+
+A limited multiply-by-10 correction is allowed only when the raw value is implausible but the corrected value is physically plausible.
+
+Example:
+
+```text
+101.4 hPa -> 1014.0 hPa
+```
+
+---
+
+## 16. Precipitation is source-specific
+
+### Decision
+
+Precipitation cannot be cleaned using numeric range alone.
+
+### Rationale
+
+GHCNh precipitation is nominally hourly but can include sub-hourly reports, running totals, high-resolution HPD data, and legacy multi-hour accumulations.
+
+### Consequence
+
+Precipitation cleaning must use:
+
+```text
+precipitation_Measurement_Code
+precipitation_Quality_Code
+precipitation_Report_Type
+precipitation_Source_Code
+```
+
+---
+
+## 17. Do not sum sub-hourly precipitation blindly
+
+### Decision
+
+Hourly precipitation aggregation uses:
+
+```text
+last_valid_report_in_hour
+```
+
+not a sum of all reports within the hour.
+
+### Rationale
+
+For METAR/AWOS/ASOS-style reports, multiple observations within one hour can represent running totals. Summing them can double-count precipitation.
+
+### Consequence
+
+The clean hourly precipitation value uses the last valid report in the hour after QC filtering.
+
+---
+
+## 18. Source 382 / QC A precipitation is excluded
+
+### Decision
+
+For `precipitation_Source_Code == 382`, values with:
+
+```text
+precipitation_Quality_Code == A
+```
+
+are excluded from `precipitation_mm`.
+
+### Rationale
+
+For Source 382, QC `A` means the value is not an hourly precipitation total. It is an accumulation over a period greater than one hour ending at that hour.
+
+### Consequence
+
+Large multi-hour accumulations from legacy records are not interpreted as hourly precipitation.
+
+---
+
+## 19. Legacy non-hourly precipitation reports are excluded
+
+### Decision
+
+Legacy non-hourly precipitation reports such as:
+
+```text
+4-DSI-3240
+```
+
+are excluded from the hourly clean precipitation variable.
+
+### Rationale
+
+Diagnostics showed that many extreme values with this report type were multi-hour or monthly-style accumulations, not hourly precipitation totals.
+
+### Consequence
+
+These records are dropped as:
+
+```text
+dropped_non_hourly_precipitation_report
+```
+
+---
+
+## 20. HPD high-resolution precipitation can be retained
+
+### Decision
+
+Source 382 reports of type:
+
+```text
+H-derived-HPD-C-high-res
+```
+
+with blank or missing QC may be retained if no other rule fails.
+
+### Rationale
+
+After filtering Source 382 QC `A` and legacy non-hourly reports, remaining high-resolution HPD values with blank QC are interpreted as retained hourly precipitation values.
+
+### Consequence
+
+The final retained clean precipitation range is:
+
+```text
+0.0-101.9 mm
+```
+
+Values around 100 mm are treated as extreme retained hourly values after QC, not typical conditions.
+
+---
+
+## 21. No usability thresholds in general coverage tables
+
+### Decision
+
+General coverage tables are generated without station usability thresholds.
+
+### Rationale
+
+Thresholds such as 25%, 50%, or 80% coverage are analytical choices and may be considered arbitrary. The first deliverable should show factual coverage.
+
+### Consequence
+
+The base coverage products report actual valid-hour counts and fractions without classifying stations as usable or unusable.
+
+Threshold diagnostics may be computed later if requested, but they do not define the base tables.
+
+---
+
+## 22. Full station-year grid
+
+### Decision
+
+Coverage tables use the full station-year grid:
+
+```text
+39 stations × 20 years = 780 station-years
+```
+
+### Rationale
+
+Using the full grid makes missing data explicit instead of hiding station-years with zero valid data.
+
+### Consequence
+
+Every variable summary should be interpreted against 780 possible station-years.
+
+---
+
+## 23. Current no-threshold coverage summary
+
+### Decision
+
+The following no-threshold coverage summary is the current reference for the clean GHCNh stage:
+
+| Variable | Station-years with any data | Stations with any data | Total valid hours | Fraction of all possible station-hours |
+|---|---:|---:|---:|---:|
+| `precipitation_mm` | 384 | 25 | 2,096,607 | 0.306634 |
+| `temperature_c` | 238 | 17 | 1,495,071 | 0.218658 |
+| `wind_speed_m_s` | 216 | 17 | 1,340,993 | 0.196124 |
+| `dew_point_temperature_c` | 127 | 9 | 693,016 | 0.101355 |
+| `relative_humidity_pct` | 127 | 9 | 692,829 | 0.101328 |
+| `station_level_pressure_hpa` | 66 | 5 | 362,616 | 0.053034 |
+
+### Consequence
+
+The station network is not uniform across variables. ERA5 comparison must account for variable-specific station coverage.
+
+---
+
+## 24. PWV is not in GHCNh
+
+### Decision
+
+PWV is not included in the GHCNh clean core.
+
+### Rationale
+
+GHCNh does not directly provide precipitable water vapor.
+
+### Consequence
+
+PWV must come from another source, such as ERA5, GNSS/GPS PWV, radiosonde data, or another validated atmospheric product.
+
+---
+
+## 25. ERA5 is the next stage, not the current primary dataset
+
+### Decision
+
+ERA5 and/or ERA5-Land are planned for the next major methodological stage.
+
+### Rationale
+
+ERA5 can provide gridded spatial continuity and variables not available directly from GHCNh, especially PWV.
+
+### Consequence
+
+ERA5 comparison should begin only after the GHCNh clean-core workflow is documented, reproducible, and its coverage limitations are transparent.
+
+---
+
+## 26. Geospatial auxiliary datasets
+
+### Decision
+
+Geospatial datasets such as SRTM DEM, GSHHG coastlines, and TIGER/Line municipality boundaries are auxiliary mapping layers.
+
+### Rationale
+
+These datasets support cartography and spatial interpretation but do not define meteorological observations.
+
+### Consequence
+
+They should be documented as auxiliary data sources, not as part of the GHCNh clean core.
+
+---
+
+## 27. Older prototype scripts are not the active workflow
+
+### Decision
+
+Older ERA5, ERA5-Land, ISD, PRISM, phase-based, and site-index scripts are not the active workflow for this branch unless explicitly reintroduced.
+
+### Rationale
+
+The project methodology changed to first understand and clean the hourly station data before advancing to reanalysis comparison.
+
+### Consequence
+
+Do not treat older outputs as current validated results.
+
+---
+
+## 28. Current frozen endpoint
+
+### Decision
+
+The current frozen endpoint is:
+
+```text
+GHCNh hourly clean core + no-threshold coverage tables
+```
+
+### Main scripts
+
+```text
+scripts/build_ghcnh_hourly_clean_core_pr.py
+scripts/build_ghcnh_hourly_clean_core_coverage_tables_pr.py
+```
+
+### Main documentation
+
+```text
+README.md
+docs/GHCNH_HOURLY_CLEAN_CORE.md
+docs/DATA_SOURCES.md
+docs/REPRODUCING.md
+docs/DECISIONS.md
+```
+
+### Next step
+
+After documentation is complete, proceed to ERA5/reanalysis comparison using the clean GHCNh data as the observational reference.
