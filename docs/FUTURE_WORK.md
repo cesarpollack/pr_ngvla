@@ -1,224 +1,339 @@
-# FUTURE_WORK.md
-# ngVLA Puerto Rico — Future Work and Coastal Coverage Plan
-# Created: April 9, 2026
-# Author: César Pollack, UPR Río Piedras
-#
-# PURPOSE: Document the plan for resolving coastal coverage limitations
-# and all future work items. This is the scientific roadmap beyond the
-# PRISM poster (April 18, 2026).
+# Future work for PR-ngVLA
+
+**Project:** PR-ngVLA
+**Current workflow stage:** GHCNh hourly clean core
+**Study period:** 2004-2023
+**Last updated:** April 2026
 
 ---
 
-## CURRENT LIMITATION — Coastal Coverage (Lajas/Guánica)
+## 1. Purpose
 
-### What the problem is
-ERA5-Land (~9 km resolution) assigns NaN to coastal pixels where the
-land fraction within the 9×9 km cell is below an internal ECMWF threshold.
-The municipalities most affected are:
+This document records the current roadmap for the PR-ngVLA workflow.
 
-| Municipality | Approx. coordinates | Status |
-|---|---|---|
-| Lajas | −67.05°W, 18.00°N | NaN in ERA5-Land |
-| Guánica | −66.93°W, 17.97°N | NaN in ERA5-Land |
-| Cabo Rojo (coastal) | −67.15°W, 17.98°N | NaN in ERA5-Land |
+The current frozen endpoint is:
 
-These municipalities are scientifically significant because they lie in
-the rain shadow of the Cordillera Central — the driest zone in PR —
-and are therefore likely candidates for the best ngVLA antenna locations.
-
-### Why ERA5-SL gap-fill did not solve it
-ERA5 single-levels (0.25°) was attempted as a gap-fill source. The
-nearest ERA5-SL pixel to Lajas/Guánica is at latitude 17.80°N, which
-has a maximum land fraction of 24% (76% ocean). Using this pixel
-introduces a marine signal bias — artificially low precipitation
-exceedance — that distorts the site selection index. With a 60% land
-fraction threshold (scientifically defensible), no ERA5-SL pixel
-recovers Lajas/Guánica.
-
-### Scientific impact
-The SW corridor result is confirmed by adjacent ERA5-Land pixels:
-- San Germán (18.1°N): index = 0.5153 ← best annual pixel
-- Yauco (18.1°N): index = 0.5136
-- Guayanilla (18.1°N): index = 0.5071
-
-These are 10-15 km from Lajas/Guánica and capture the same rain shadow.
-The conclusion — SW corridor is most favorable — is robust. The
-limitation is that we cannot quantify conditions AT Lajas/Guánica
-specifically.
-
----
-
-## PLANNED SOLUTIONS — Ordered by Priority
-
-### Solution 1 — WRF Dynamical Downscaling ⭐ RECOMMENDED
-**Priority:** High | **Timeline:** Phase 5 (post-May 2026)
-
-**What:** Run the WRF (Weather Research and Forecasting) model at
-1-3 km resolution over Puerto Rico, using ERA5 as boundary conditions.
-WRF resolves individual municipalities, coastlines, and topographic
-features at the scale needed to evaluate Lajas, Guánica, Mona Island,
-Culebra, and Vieques.
-
-**Why this is the right answer:**
-- WRF is the standard approach for high-resolution climate studies
-  in the Caribbean
-- Multiple WRF studies over PR already exist — methodology is established
-- Resolves all coastal municipalities simultaneously
-- Can be validated against NOAA ISD stations
-- Directly comparable to ERA5 results from this study
-
-**References to search:**
-- WRF climate studies in Puerto Rico / Caribbean
-- Tropical cyclone downscaling with WRF in the Caribbean
-- Search terms: "WRF Puerto Rico climate", "WRF Caribbean downscaling"
-
-**Computational requirements:**
-- Requires WRF installation on astroiupi or similar HPC
-- ERA5 boundary conditions already downloaded (data_raw/era5/)
-- Estimated run time: days to weeks for 20-year simulation
-
-**Poster language:**
-> "Future work includes dynamical downscaling using the WRF model at
-> 1–3 km resolution to resolve coastal municipalities not captured by
-> ERA5-Land. ERA5 boundary conditions for this simulation are already
-> available from the current study."
-
----
-
-### Solution 2 — Custom Land-Sea Mask for ERA5-SL
-**Priority:** Medium | **Timeline:** Phase 4 / report (May 2026)
-
-**What:** Instead of using ECMWF's internal land-sea mask, construct a
-custom binary mask from the PR municipality shapefile. For each ERA5-SL
-pixel, assign the value from the nearest VALID land point (not the
-pixel-averaged value that mixes land and ocean).
-
-**Why this could work:**
-- Avoids the marine signal contamination problem
-- Uses the same ERA5-SL data already downloaded
-- Methodologically similar to nearest-neighbor land extraction used
-  in other island studies
-
-**Implementation sketch:**
-```python
-# For each ERA5-SL pixel that intersects PR land:
-# Instead of using the pixel value (which mixes land+ocean),
-# find the nearest ERA5-Land pixel that IS valid
-# and use that as the fill value
-
-# This is essentially a spatial extrapolation from known land points
-# rather than a direct ERA5-SL value
+```text
+GHCNh hourly clean core + no-threshold coverage tables
 ```
 
-**Limitation:** This is extrapolation, not independent data.
-Must be clearly labeled as such in methodology.
+The next major methodological stage is ERA5/reanalysis comparison using the clean GHCNh station data as the observational reference.
+
+Older future-work notes related to ERA5-first processing, NOAA ISD-only validation, PRISM prototypes, gap filling, or site-index maps should be treated as historical context unless explicitly reintroduced.
 
 ---
 
-### Solution 3 — CHELSA Climate Data (Precipitation + Temperature)
-**Priority:** Low for this study | **Timeline:** Future publication
+## 2. Current completed stage
 
-**What:** CHELSA (Climatologies at High Resolution for the Earth's
-Land Surface Areas) provides 1 km resolution climate data for
-precipitation and temperature derived from ERA5 with statistical
-downscaling.
+The following stage is considered frozen:
 
-**Available variables:** Precipitation, Tmax, Tmin (monthly means)
-**Not available:** RH, PWV, Wind — limiting for ngVLA site selection
+```text
+GHCNh hourly clean core: strict QC + no-threshold coverage tables
+```
 
-**Use case:** Spatial validation of ERA5-Land precipitation patterns
-at 1 km resolution. Could replace PRISM as validation dataset since
-PRISM PR normals will not be updated.
+Main scripts:
 
-**Download:** https://chelsa-climate.org/
+```text
+scripts/build_ghcnh_hourly_clean_core_pr.py
+scripts/build_ghcnh_hourly_clean_core_coverage_tables_pr.py
+```
 
----
+Main documentation:
 
-### Solution 4 — In-Situ Weather Station Deployment
-**Priority:** High for final site selection | **Timeline:** Phase 6+
+```text
+README.md
+docs/GHCNH_HOURLY_CLEAN_CORE.md
+docs/DATA_SOURCES.md
+docs/REPRODUCING.md
+docs/DECISIONS.md
+docs/ARCHITECTURE.md
+docs/FUTURE_WORK.md
+```
 
-**What:** Deploy a portable weather station (similar to ngVLA Memo 117
-methodology) at candidate sites in Lajas/Guánica for 6-12 months.
-Collect in-situ measurements of all 7 study variables.
+Main clean product:
 
-**Why this is the definitive answer:**
-- Eliminates all reanalysis resolution limitations
-- Directly comparable to Memo 117 methodology
-- Provides site-specific validation that ERA5 cannot
-- Standard practice in radio telescope site characterization
+```text
+data_interim/noaa/ghcnh_hourly/clean_core/ghcnh_hourly_clean_core_2004_2023.parquet
+```
 
-**Precedent:** ngVLA Memo 117 (Linford & Cooper 2023) deployed a
-portable weather station at Pohakuloa Training Area, Hawaii.
-Same methodology would apply to SW Puerto Rico.
+Main coverage products:
 
-**Requirements:**
-- Funding for equipment and deployment
-- Site access agreements with landowners in Lajas/Guánica
-- Minimum 1 year of continuous data for climatological significance
+```text
+data_interim/noaa/ghcnh_hourly/clean_core/coverage_no_thresholds/
+```
 
 ---
 
-### Solution 5 — ERA5 Pressure Levels + Vertical Interpolation
-**Priority:** Low | **Timeline:** Future publication
+## 3. Immediate next step
 
-**What:** Use ERA5 pressure-level data to extract near-surface
-conditions using vertical interpolation to the actual surface
-elevation from the DEM.
+The immediate next methodological step is:
 
-**Why considered:** Could recover coastal pixels by using a level
-above the surface and interpolating down.
+```text
+Design the ERA5/reanalysis comparison stage.
+```
 
-**Why low priority:** Complex methodology, adds uncertainty,
-and WRF downscaling (Solution 1) is more scientifically robust
-and already standard in the field.
+This should be done carefully and incrementally. The ERA5 stage should not overwrite or bypass the frozen GHCNh clean-core workflow.
+
+The ERA5 stage should use the clean GHCNh station data as the observational reference.
 
 ---
 
-## PHASE 4 AND BEYOND — Full Roadmap
+## 4. ERA5/reanalysis comparison goals
 
-| Phase | Timeline | Goal | Status |
-|---|---|---|---|
-| 3A | Mar 2026 ✅ | Fuzzy-logic site selection index | Complete |
-| 3B | Apr 2026 🔄 | ERA5-SL gap-fill (partial success) | In progress |
-| Poster | Apr 18, 2026 | PRISM conference presentation | ← DEADLINE |
-| 4 | May 2026 | Monte Carlo uncertainty + sensitivity analysis | Pending |
-| 4 | May 2026 | DEM lapse rate downscaling (T, P) | Pending |
-| 4 | May 2026 | Hurricane Maria exclusion sensitivity | Pending |
-| 5 | Jun–Aug 2026 | WRF downscaling at 1-3 km | Future |
-| 6 | TBD | In-situ station deployment | Future |
-| 7 | TBD | Final journal publication | Future |
+The next stage should answer:
+
+1. How well do ERA5 or ERA5-Land variables match the cleaned GHCNh station observations?
+2. Which variables can be compared directly?
+3. Which variables require derived quantities or additional assumptions?
+4. How does station coverage vary by variable?
+5. Which stations have enough clean data to support comparison?
+6. How should coastal and mountainous Puerto Rico grid-cell issues be handled?
+7. How should PWV be incorporated, given that PWV is not available directly from GHCNh?
 
 ---
 
-## WHAT TO SAY IN THE POSTER — Future Work Section
+## 5. ERA5 variables to evaluate
 
-**Short version (poster):**
-> "Coastal municipalities (Lajas, Guánica) were not resolved by ERA5-Land
-> at 9 km resolution. Future work includes: (1) dynamical downscaling
-> using the WRF model at 1–3 km resolution, and (2) Phase 4 Monte Carlo
-> sensitivity analysis of the site selection index weights."
+Potential ERA5 or ERA5-Land variables for comparison include:
 
-**Extended version (for questions):**
-> "ERA5-Land assigns NaN to coastal pixels where land fraction is below
-> an internal threshold. An ERA5 single-levels gap-fill was attempted,
-> but pixels near Lajas/Guánica have <25% land fraction and introduce
-> marine signal contamination. The SW corridor result is confirmed by
-> adjacent ERA5-Land pixels in San Germán, Yauco, and Guayanilla —
-> municipalities 10-15 km from the unresolved coastal zone that capture
-> the same rain shadow pattern. WRF downscaling at 1-3 km is planned
-> to resolve individual coastal municipalities in future work."
+| Target concept | Possible reanalysis variable | GHCNh comparison availability |
+|---|---|---|
+| Air temperature | 2 m temperature | Available as `temperature_c` |
+| Dew point | 2 m dew point temperature | Available as `dew_point_temperature_c` |
+| Relative humidity | Derived from temperature and dew point if needed | Available as `relative_humidity_pct` |
+| Wind speed | 10 m wind components or wind speed | Available as `wind_speed_m_s` |
+| Surface/station pressure | Surface pressure or pressure adjusted by elevation | Available as `station_level_pressure_hpa`, but limited |
+| Precipitation | Total precipitation | Available as `precipitation_mm`, with source-specific cleaning |
+| PWV | Total column water vapor / precipitable water vapor | Not available in GHCNh |
+
+PWV requires special treatment because it cannot be validated directly against GHCNh unless another observational PWV source is added.
 
 ---
 
-## KEY POINT FOR COMMITTEE AND ADVISOR
+## 6. Important methodological constraints for ERA5
 
-The poster presents scientifically valid progress. The limitation
-(coastal coverage) is:
-1. Fully documented in DECISIONS.md (D08)
-2. Does NOT affect the main conclusion (SW corridor is most favorable)
-3. Has a clear methodological path forward (WRF)
-4. Is consistent with published limitations of ERA5-Land in coastal zones
-   (Muñoz-Sabater et al. 2021)
+The ERA5 comparison stage must handle:
 
-A poster that honestly documents limitations and identifies future work
-is stronger than one that glosses over them.
+1. Time alignment between GHCNh hourly records and ERA5 timestamps.
+2. Unit conversion.
+3. Station-to-grid matching.
+4. Coastal grid-cell representation.
+5. Elevation differences between station elevation and model grid elevation.
+6. Variable-specific station coverage.
+7. Missing observational PWV in GHCNh.
+8. Puerto Rico’s strong precipitation and terrain gradients.
+
+ERA5 comparison should not assume that all GHCNh stations have all variables.
+
+---
+
+## 7. Station coverage should remain visible
+
+The no-threshold coverage tables should remain the base reference.
+
+Thresholds such as 25%, 50%, or 80% may be discussed later, but they should not replace the general no-threshold coverage tables unless the advisor explicitly requests a threshold-based classification.
+
+Current full grid:
+
+```text
+39 stations × 20 years = 780 station-years
+```
+
+Current no-threshold clean coverage summary:
+
+| Variable | Station-years with any data | Stations with any data | Total valid hours | Fraction of all possible station-hours |
+|---|---:|---:|---:|---:|
+| `precipitation_mm` | 384 | 25 | 2,096,607 | 0.306634 |
+| `temperature_c` | 238 | 17 | 1,495,071 | 0.218658 |
+| `wind_speed_m_s` | 216 | 17 | 1,340,993 | 0.196124 |
+| `dew_point_temperature_c` | 127 | 9 | 693,016 | 0.101355 |
+| `relative_humidity_pct` | 127 | 9 | 692,829 | 0.101328 |
+| `station_level_pressure_hpa` | 66 | 5 | 362,616 | 0.053034 |
+
+---
+
+## 8. Possible ERA5 workflow design
+
+A future ERA5 workflow should probably be organized as a new reproducible stage.
+
+Possible stages:
+
+```text
+1. Build station-target table from GHCNh clean coverage.
+2. Download or locate ERA5/ERA5-Land hourly data.
+3. Extract nearest-grid or interpolated ERA5 values at station locations.
+4. Align ERA5 and GHCNh by timestamp.
+5. Compare variable-by-variable.
+6. Generate summary statistics and diagnostic plots.
+7. Document limitations before using ERA5 spatial fields for site characterization.
+```
+
+This should be implemented with as few scripts as practical, avoiding fragmentation.
+
+---
+
+## 9. Comparison metrics to consider
+
+Possible comparison metrics:
+
+1. Mean bias error.
+2. Mean absolute error.
+3. Root mean square error.
+4. Correlation coefficient.
+5. Seasonal or monthly summaries.
+6. Hour-of-day summaries.
+7. Event-based checks for precipitation and wind.
+8. Station-by-station diagnostic plots.
+
+These metrics should be chosen after confirming variable availability and time alignment.
+
+---
+
+## 10. Precipitation-specific future work
+
+Precipitation requires special caution.
+
+Future ERA5 precipitation comparison should account for:
+
+1. GHCNh precipitation source codes.
+2. Hourly versus accumulated precipitation definitions.
+3. ERA5 accumulation conventions.
+4. Local convective extremes in Puerto Rico.
+5. Terrain and coastal effects.
+6. The fact that high hourly values can be real but should be interpreted as extremes.
+
+The current retained GHCNh hourly precipitation maximum is:
+
+```text
+101.9 mm
+```
+
+This should be described as an extreme retained hourly value after QC, not as a typical condition.
+
+---
+
+## 11. PWV future work
+
+PWV is scientifically important for ngVLA high-frequency observing, but it is not directly available from GHCNh.
+
+Future PWV options:
+
+1. ERA5 total column water vapor.
+2. GNSS/GPS PWV products if available.
+3. Radiosonde-derived PWV.
+4. Other validated atmospheric products.
+
+PWV should not be inserted into the GHCNh clean core unless it comes from a clearly documented external source.
+
+---
+
+## 12. Mapping future work
+
+Geospatial mapping should use documented auxiliary layers:
+
+```text
+SRTM 1-Arcsecond Global DEM
+NOAA NCEI GSHHG coastline
+U.S. Census Bureau TIGER/Line municipality boundaries
+```
+
+Future maps should clearly distinguish between:
+
+1. Observational station data.
+2. Reanalysis gridded data.
+3. Auxiliary geospatial layers.
+4. Derived suitability or ranking products.
+
+Maps should not imply unsupported precision where station coverage is limited.
+
+---
+
+## 13. Site suitability future work
+
+Site suitability or ranking should wait until after:
+
+1. GHCNh clean-core coverage is documented.
+2. ERA5/reanalysis comparison is complete.
+3. PWV source and methodology are defined.
+4. Variable thresholds are justified.
+5. Weighting or MCDA assumptions are clearly documented.
+
+The project should not return to final suitability maps until the observational and reanalysis foundations are stable.
+
+---
+
+## 14. Possible threshold work
+
+Coverage thresholds may be considered later.
+
+Examples:
+
+```text
+25% annual coverage
+50% annual coverage
+80% annual coverage
+```
+
+However, these thresholds are analytical choices. They should not replace the no-threshold coverage tables unless explicitly adopted.
+
+If thresholds are used later, they should be documented as decisions in:
+
+```text
+docs/DECISIONS.md
+```
+
+---
+
+## 15. Documentation future work
+
+Future documentation updates should remain incremental.
+
+When a new workflow stage is frozen, update:
+
+```text
+README.md
+docs/DATA_SOURCES.md
+docs/REPRODUCING.md
+docs/DECISIONS.md
+docs/ARCHITECTURE.md
+docs/FUTURE_WORK.md
+```
+
+Historical documents should be moved to:
+
+```text
+docs/archive/
+```
+
+only when they are clearly no longer part of the active workflow.
+
+---
+
+## 16. Current next action
+
+The next action after completing this documentation update is:
+
+```text
+Start designing the ERA5/reanalysis comparison workflow.
+```
+
+Before writing ERA5 code, define:
+
+1. Which ERA5 product to use first.
+2. Which variables to compare first.
+3. Which stations/years to use for the first test.
+4. Whether to begin with one year as a pilot.
+5. How to store extracted station-grid comparison tables.
+6. Which diagnostic statistics and plots are required.
+
+---
+
+## 17. Guiding principle
+
+The guiding principle remains:
+
+```text
+Do not advance with data that do not make physical or methodological sense.
+```
+
+If the values do not make sense, stop and understand the data before continuing.
