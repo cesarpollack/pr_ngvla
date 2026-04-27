@@ -1,448 +1,548 @@
-# REPRODUCING.md
-# ngVLA Puerto Rico — How to Reproduce All Results from Scratch
-# Last updated: April 2026
-# Author: César Pollack, UPR Río Piedras
-#
-# PURPOSE: A new graduate student with no prior knowledge of this project
-# should be able to reproduce all results by following this document alone.
-# Assumes: Linux, Python, basic physics knowledge. No ERA5 or reanalysis
-# experience required.
+# Reproducing the current PR-ngVLA workflow
+
+**Project:** PR-ngVLA
+**Current workflow stage:** GHCNh hourly clean core
+**Study period:** 2004-2023
+**Last updated:** April 2026
 
 ---
 
-## Before you start — read these two documents first
+## 1. Purpose
 
-1. `docs/ARCHITECTURE.md` — understand the code structure and design rules
-2. `docs/DECISIONS.md` — understand why every scientific choice was made
+This document explains how to reproduce the current active workflow in this branch.
 
-Do not skip this. The design rules in ARCHITECTURE.md prevent silent bugs
-that are very hard to debug later.
+The current frozen stage is:
 
----
-
-## Overview of what you are reproducing
-
-The analysis has three phases, each depending on the previous:
-
-```
-Phase 1 → Monthly climatology maps (7 variables, 20-year means)
-    ↓
-Phase 2 → Hourly exceedance analysis + ERA5 validation vs NOAA stations
-    ↓
-Phase 3A → Site selection index (fuzzy-logic composite of Phase 2 results)
-    ↓
-Phase 3B → ERA5-SL gap-fill for coastal pixels
-    ↓
-    Final maps (poster figures)
+```text
+GHCNh hourly clean core: strict QC + no-threshold coverage tables
 ```
 
-Total computation time after data download: approximately 2–4 hours on astroiupi.
-Data download time: several days (ERA5 queue is slow — plan ahead).
+This workflow builds a reliable observational station dataset from NOAA GHCNh hourly data for Puerto Rico before comparison against ERA5 or other reanalysis products.
+
+This document does **not** reproduce the older ERA5-first, NOAA ISD, or site-ranking prototype workflow. Those older scripts may still exist in the repository, but they are not the current methodological reference for this branch.
+
+Current technical reference:
+
+```text
+docs/GHCNH_HOURLY_CLEAN_CORE.md
+```
+
+Current data-source reference:
+
+```text
+docs/DATA_SOURCES.md
+```
 
 ---
 
-## STEP 0 — Set up the environment
+## 2. Important workflow rule
 
-### 0.1 — Clone the repository
+Do not advance to ERA5/reanalysis comparison until the GHCNh observational workflow is clean, reproducible, and documented.
+
+The purpose of this stage is to answer:
+
+1. Which Puerto Rico stations exist in GHCNh?
+2. Which station-year files are available?
+3. Which variables survive strict quality control?
+4. What is the real clean coverage by station, year, and variable?
+5. Are the retained values physically and methodologically defensible?
+
+---
+
+## 3. Environment setup
+
+### 3.1 Activate the conda environment
+
+On `astroiupi`:
 
 ```bash
-cd /export/ngvla/cpollack
-git clone https://github.com/cesarpollack/pr_ngvla.git
-cd pr_ngvla
-```
-
-### 0.2 — Create the conda environment
-
-```bash
-/export/ngvla/cpollack/miniconda3/bin/conda env create -f environment.yml
+cd /export/ngvla/cpollack/pr_ngvla
 conda activate pr_ngvla
 ```
 
-This installs all dependencies and the `pr_ngvla` library in editable mode.
-It takes 5–15 minutes. When finished you should see:
-```
-Successfully installed pr-ngvla-0.1.0
-```
-
-### 0.3 — Verify the installation
+Verify Python:
 
 ```bash
-python -c "import pr_ngvla; print(pr_ngvla.__version__)"
+which python
+python --version
+```
+
+Expected: Python should come from the `pr_ngvla` conda environment, not from `/usr/bin/python`.
+
+### 3.2 Basic code checks
+
+```bash
 python -m pytest tests/ -v
 ```
 
-All tests must pass (green). If any test fails, stop — do not proceed.
-
-### 0.4 — Check which Python is active
-
-```bash
-which python    # must show: .../miniconda3/envs/pr_ngvla/bin/python
-python --version  # must show: Python 3.11.x
-```
-
-If it shows `/usr/bin/python`, the conda env is not active. Run:
-```bash
-source /export/ngvla/cpollack/miniconda3/bin/activate pr_ngvla
-```
+If tests fail, stop and fix the environment or code before continuing.
 
 ---
 
-## STEP 1 — Download the data
+## 4. Data tracking policy
 
-See `docs/DATA_SOURCES.md` for a full description of each dataset.
-Here are the commands.
+Large data products are not tracked in Git.
 
-### 1.1 — Configure CDS API (Copernicus — for ERA5)
+Not tracked:
 
-You need a free account at https://cds.climate.copernicus.eu
-
-After registering and accepting the ERA5 terms of use:
-
-```bash
-nano ~/.cdsapirc
+```text
+data_raw/
+data_interim/
+outputs/
+logs/
 ```
 
-Paste (replace with your token):
-```
-url: https://cds.climate.copernicus.eu/api
-key: YOUR-PERSONAL-ACCESS-TOKEN-HERE
-```
+Tracked:
 
-Verify:
-```bash
-python -c "import cdsapi; c = cdsapi.Client(); print('CDS API OK')"
-```
-
-### 1.2 — Run all downloads
-
-```bash
-chmod +x scripts/run_all_downloads.sh
-./scripts/run_all_downloads.sh
+```text
+scripts/
+docs/
+src/
+tests/
+environment.yml
+pyproject.toml
+README.md
 ```
 
-This launches 4 tmux sessions running in parallel. Monitor them:
-```bash
-tmux ls
-tmux attach -t era5_monthly   # Ctrl+B then D to detach
-tmux attach -t era5_pwv
-tmux attach -t era5_hourly_A
-tmux attach -t era5_hourly_B
-```
-
-Check progress in logs:
-```bash
-tail -f logs/download_monthly.log
-tail -f logs/download_hourly_A.log
-```
-
-### 1.3 — Download NOAA ISD stations
-
-```bash
-python scripts/download_noaa_isd_pr.py
-```
-
-This downloads the 5 validation stations to `data_raw/noaa/isd/`.
-
-### 1.4 — Verify data completeness
-
-```bash
-# ERA5-Land hourly: expect 480 files (20 years × 12 months × 2 variable groups)
-ls data_raw/era5/hourly/*.nc | wc -l    # expect 480
-
-# ERA5-Land monthly: expect 2 files
-ls data_raw/era5/monthly/*.nc           # expect 2 files
-
-# ERA5 Single-Levels hourly: expect 720 files
-ls data_raw/era5/singlelev/*.nc | wc -l # expect ~720
-
-# ERA5 PWV: expect 20 files (one per year)
-ls data_raw/era5/pwv/*.nc | wc -l       # expect 20
-
-# NOAA ISD: expect 5 station CSV files + catalog
-ls data_raw/noaa/isd/*.csv
-```
-
-> ⚠️ Do not proceed to Phase 1 until all ERA5-Land hourly files are present.
-> The monthly files download in minutes; the hourly files take several days.
+The workflow should be reproducible from scripts and documentation, not from committing raw or intermediate data.
 
 ---
 
-## STEP 2 — Phase 1: Monthly climatology maps
+## 5. Required local input data
 
-These scripts compute 20-year monthly mean climatologies and save maps.
-Each script is independent — they can run in any order.
+The current GHCNh workflow depends on these local data categories:
+
+### 5.1 GHCNh metadata
+
+Expected location:
+
+```text
+data_raw/noaa/ghcnh/metadata/
+```
+
+Required files:
+
+```text
+ghcnh-station-list.csv
+ghcnh-inventory.txt
+```
+
+If missing, download them with:
 
 ```bash
-conda activate pr_ngvla
+python scripts/download_ghcnh_metadata.py
+```
+
+### 5.2 Geospatial support files for the station inventory
+
+The station-inventory workflow uses Puerto Rico spatial reference layers to filter stations to the territory.
+
+Expected local sources include:
+
+```text
+data_raw/shapefiles/GSHHS_h_L1.shp
+data_raw/shapefiles/tl_2024_us_county/tl_2024_us_county.shp
+```
+
+These are auxiliary mapping/spatial-filtering layers. They do not define meteorological values.
+
+### 5.3 GHCNh hourly station-year files
+
+Expected raw hourly files:
+
+```text
+data_raw/noaa/ghcnh/hourly/by_year/<YYYY>/parquet/GHCNh_<station>_<YYYY>.parquet
+```
+
+The current clean-core workflow expects Parquet station-year files.
+
+---
+
+## 6. Step 1 — Build the Puerto Rico GHCNh station inventory
+
+Run:
+
+```bash
+python scripts/build_ghcnh_station_inventory_pr.py
+```
+
+Expected output directory:
+
+```text
+data_interim/noaa/ghcnh_station_inventory/
+```
+
+Important expected file:
+
+```text
+data_interim/noaa/ghcnh_station_inventory/pr_ghcnh_station_inventory_master.parquet
+```
+
+This master inventory is used by the download and coverage-table stages.
+
+Expected current inventory basis:
+
+```text
+39 stations
+```
+
+If the script fails, check that the GHCNh metadata files and geospatial shapefiles exist locally.
+
+---
+
+## 7. Step 2 — Download GHCNh hourly station-year files
+
+The downloader uses direct NOAA/NCEI HTTPS access. It does **not** require a CDO token.
+
+Dry run:
+
+```bash
+python scripts/download_ghcnh_hourly_station_year_pr.py --dry-run
+```
+
+Recommended current download mode:
+
+```bash
+python scripts/download_ghcnh_hourly_station_year_pr.py --file-mode parquet
+```
+
+For long runs, use `tmux`:
+
+```bash
+tmux new -s ghcnh_hourly_download
+```
+
+Inside `tmux`:
+
+```bash
 cd /export/ngvla/cpollack/pr_ngvla
-
-python scripts/phase1_map_temperature.py
-python scripts/phase1_map_rh.py
-python scripts/phase1_map_tdep.py
-python scripts/phase1_map_wind.py
-python scripts/phase1_map_precip.py
-python scripts/phase1_map_pwv.py
-python scripts/phase1_map_dem.py
-```
-
-**Expected outputs** in `outputs/maps/`:
-```
-phase1_temperature_monthly_climatology.png
-phase1_rh_monthly_climatology.png
-phase1_tdep_monthly_climatology.png
-phase1_wind_monthly_climatology.png
-phase1_precip_monthly_climatology.png
-phase1_pwv_monthly_climatology.png
-phase1_dem_stations.png
-```
-
-**Sanity check** — compare printed ranges against known PR climatology:
-- Temperature: 21–28°C ✓ (tropical island)
-- RH: 67–87% ✓ (humid tropical)
-- Wind: 1–5 m/s ✓ (trade winds, well below 9 m/s threshold)
-- PWV: 26–47 mm ✓ (entire PR exceeds 6 mm Good threshold)
-
----
-
-## STEP 3 — Phase 2: Exceedance analysis and validation
-
-### 3.1 — Compute exceedance climatologies
-
-This is the most computationally intensive step (~1–2 hours on astroiupi).
-It reads all 480 hourly ERA5-Land files and computes, for each pixel and
-month, the fraction of hours exceeding each ngVLA threshold.
-
-```bash
-python scripts/phase2_exceedance.py
-```
-
-**Expected outputs** in `outputs/phase2/`:
-```
-rh_exceedance_climatology.nc
-wind_exceedance_climatology.nc
-precip_exceedance_climatology.nc
-pwv_exceedance_climatology.nc
-```
-
-**Hurricane Maria exclusion:** months 2017-09 through 2018-06 are
-automatically excluded (see `config.py: MARIA_START, MARIA_END`).
-This removes 9 months from the 20-year record to avoid ERA5 quality
-degradation during and after Maria.
-
-### 3.2 — Validate ERA5 against NOAA ISD stations
-
-```bash
-python scripts/phase2_validation.py
-```
-
-**Expected output:** `outputs/validation/era5_vs_isd_metrics.csv`
-
-**Expected results** (from completed analysis):
-- RH: MBE < 3% at all 5 stations — no systematic bias
-- Wind: ERA5-Land underestimates at 4/5 stations (MBE: −0.4 to −1.2 m/s)
-  This is expected behavior in complex terrain at 9 km resolution.
-
-### 3.3 — Generate exceedance maps
-
-```bash
-python scripts/phase2_map_exceedance.py --var rh
-python scripts/phase2_map_exceedance.py --var wind
-python scripts/phase2_map_exceedance.py --var precip
-python scripts/phase2_map_exceedance.py --var pwv
-```
-
-Or all at once:
-```bash
-python scripts/phase2_map_exceedance.py --var all
-```
-
-**Expected outputs** in `outputs/maps/phase2/`:
-```
-phase2_rh_exceedance_climatology.png
-phase2_wind_exceedance_climatology.png
-phase2_precip_exceedance_climatology.png
-phase2_pwv_exceedance_climatology.png
-```
-
-**Sanity check** — print the island-wide annual mean exceedance:
-- RH > 50%: ~97.9% ← entire island is humid almost all the time
-- Wind > 9 m/s: ~0% ← wind is never a problem in PR
-- Precip > 1 mm/hr: ~25.4% ← SW much lower than NE
-- PWV > 26 mm: ~90.2% ← very high island-wide, SW drops to ~50% in Jan–Mar
-
----
-
-## STEP 4 — Phase 3A: Site selection index
-
-### 4.1 — Compute the composite index
-
-```bash
-python scripts/phase3_composite_index.py
-```
-
-**Expected outputs** in `outputs/phase3/`:
-```
-composite_index_monthly.nc   ← (12, lat, lon) site selection index per month
-composite_index_annual.nc    ← (lat, lon) annual mean index
-best_regions_annual.csv      ← top pixels ranked by annual index
-best_regions_monthly.csv     ← top pixels ranked per month
-best_municipalities.csv      ← municipality-level aggregation
-best_regions_summary.txt     ← human-readable summary
-```
-
-**Expected top result:** San Germán, index ≈ 0.5153
-
-The site selection index formula (equal weights):
-```
-F_i = 1 - exceedance_fraction_i    (per variable)
-Index = (F_RH + F_wind + F_precip + F_PWV) / 4
-```
-0 = least favorable, 1 = most favorable.
-
-### 4.2 — Generate composite maps (without gap-fill)
-
-```bash
-python scripts/phase3_map_composite.py
-```
-
-**Expected outputs** in `outputs/maps/phase3/`:
-```
-phase3_composite_annual.png
-phase3_composite_monthly.png
-```
-
----
-
-## STEP 5 — Phase 3B: ERA5-SL gap-fill for coastal pixels
-
-ERA5-Land assigns NaN to coastal pixels where land fraction is too low.
-This step uses ERA5 Single-Levels (coarser, ~28 km) to partially fill those gaps.
-
-**Important limitation:** Lajas and Guánica (southernmost coast) remain NaN
-even after gap-fill because the nearest ERA5-SL pixel has only ~24% land
-fraction (below the 60% threshold). This is documented in `docs/DECISIONS.md`
-entry D08 and `docs/FUTURE_WORK.md`.
-
-### 5.1 — Run the gap-fill
-
-```bash
-python scripts/phase3_gapfill_singlelev.py
-```
-
-**Expected outputs** in `outputs/phase3/gapfill/`:
-```
-rh_exceedance_gapfilled.nc
-wind_exceedance_gapfilled.nc
-precip_exceedance_gapfilled.nc
-pwv_exceedance_gapfilled.nc
-composite_index_monthly_gf.nc
-composite_index_annual_gf.nc
-provenance_mask.nc           ← 0=ocean, 1=ERA5-Land, 2=ERA5-SL gap-fill
-gapfill_report.txt           ← summary of pixels recovered
-```
-
-### 5.2 — Generate gap-filled maps (poster figures)
-
-```bash
-python scripts/phase3_map_gapfill.py
-```
-
-**Expected outputs** in `outputs/maps/phase3/`:
-```
-phase3_composite_annual_gf.png    ← PRIMARY POSTER FIGURE
-phase3_composite_monthly_gf.png   ← SECONDARY POSTER FIGURE
-```
-
----
-
-## STEP 6 — Generate best regions report
-
-```bash
-python scripts/phase3_best_regions_report.py
-```
-
-This prints and saves the ranking of municipalities by site selection index.
-The expected top 10 (annual mean):
-
-| Rank | Municipality | Index |
-|---|---|---|
-| 1 | San Germán | 0.5153 |
-| 2 | Yauco | 0.5136 |
-| 3 | Lares | 0.5110 |
-| 4 | Las Marías | 0.5088 |
-| 5 | Guayanilla | 0.5071 |
-| 6 | Adjuntas | 0.5060 |
-| 7 | Peñuelas | 0.5007 |
-| 8 | Utuado | 0.4997 |
-| 9 | Jayuya | 0.4990 |
-| 10 | Mayagüez | 0.4985 |
-
-If your results differ significantly, check that Hurricane Maria months
-are excluded and that the ERA5-SL land fraction threshold is 60%.
-
----
-
-## STEP 7 — Sync results to your laptop
-
-```bash
-rsync -avz --progress \
-    cpollack@astroiupi:/export/ngvla/cpollack/pr_ngvla/outputs/maps/ \
-    ./maps/
-```
-
----
-
-## Troubleshooting common problems
-
-**`ModuleNotFoundError: No module named 'pr_ngvla'`**  
-The conda environment is not active or the library is not installed.
-```bash
 conda activate pr_ngvla
-pip install -e .
+
+python scripts/download_ghcnh_hourly_station_year_pr.py --file-mode parquet 2>&1 | tee data_raw/noaa/ghcnh/hourly/logs/ghcnh_hourly_download_run.log
 ```
 
-**`KeyError: 'valid_time'` or `KeyError: 'time'`**  
-ERA5-Land uses `time`; ERA5 Single-Levels uses `valid_time`. Check which
-file you are loading and use the correct dimension name.
+Detach without killing the process:
 
-**`load_vector_data()` returns wrong number of values**  
-Always unpack all three return values:
-```python
-muni_clip, coast_union, muni_land_union = load_vector_data(COAST_SHP, MUNI_SHP)
+```text
+Ctrl-b then d
 ```
 
-**White patches in SW coast of maps**  
-You are using `coast_union` for ocean masking instead of `muni_land_union`.
-See ARCHITECTURE.md Rule 5.
+Reconnect:
 
-**CDS API 403 error during download**  
-You have not accepted the ERA5 terms of use on the CDS website, or your
-request is too large. Accept terms at cds.climate.copernicus.eu and
-request one month at a time for hourly data.
+```bash
+tmux attach -t ghcnh_hourly_download
+```
 
-**Exceedance values seem too high (e.g., 93% for precipitation)**  
-You are using the >0 mm/hr threshold. ERA5 generates numerical drizzle.
-Use >1 mm/hr as the threshold. See `docs/DECISIONS.md` entry D05.
+The current completed workflow used station-year Parquet files in:
+
+```text
+data_raw/noaa/ghcnh/hourly/by_year/
+```
+
+Expected current number of raw Parquet files used by the clean-core stage:
+
+```text
+591 files
+```
 
 ---
 
-## What results should look like
+## 8. Step 3 — Raw coverage diagnostics before cleaning
 
-If everything works correctly:
+Run the raw variable coverage diagnostic:
 
-- All Phase 1 maps show a clear west-to-east gradient — SW is drier,
-  NE (El Yunque area) is much wetter
-- Phase 2 exceedance maps show SW corridor consistently lowest for
-  precipitation and PWV
-- Phase 3 annual composite map shows a green cluster in the SW
-  (San Germán, Yauco, Guayanilla area)
-- The monthly composite clearly shows Jan–Mar as the most favorable window
+```bash
+python scripts/build_ghcnh_hourly_variable_coverage_pr.py
+```
 
-If the spatial patterns are reversed or uniform, there is likely a
-coordinate issue (latitude array reversed or wrong variable loaded).
+Purpose:
+
+1. Verify which raw Parquet files exist.
+2. Count records, timestamps, and unique hours.
+3. Identify available variables by station-year.
+4. Inspect raw numeric ranges before cleaning.
+5. Inspect quality-code availability before clean-core decisions.
+
+This script is diagnostic. It does not define the final clean dataset.
 
 ---
 
-*For questions about the science: contact Dr. Mayra Lebrón Santos (advisor)*  
-*For questions about the code: read docs/DECISIONS.md and docs/ARCHITECTURE.md first*  
-*Last updated: April 2026 — César Pollack, UPR Río Piedras / CARSE*
+## 9. Step 4 — Quality/unit diagnostics before clean core
+
+Run:
+
+```bash
+python scripts/build_ghcnh_hourly_quality_units_diagnostics_pr.py
+```
+
+Purpose:
+
+1. Inspect raw values and quality codes.
+2. Identify physically unreasonable values.
+3. Identify scale issues such as values encoded in tenths.
+4. Inspect precipitation metadata such as `Source_Code`, `Quality_Code`, `Measurement_Code`, and `Report_Type`.
+5. Support strict clean-core rules before they are applied.
+
+This script is diagnostic. It should be used to understand the data before trusting the clean-core output.
+
+---
+
+## 10. Step 5 — Build the strict GHCNh hourly clean core
+
+Run:
+
+```bash
+python scripts/build_ghcnh_hourly_clean_core_pr.py
+```
+
+For a long run, use `tmux`:
+
+```bash
+tmux new -s ghcnh_clean_core
+```
+
+Inside `tmux`:
+
+```bash
+cd /export/ngvla/cpollack/pr_ngvla
+conda activate pr_ngvla
+
+python scripts/build_ghcnh_hourly_clean_core_pr.py 2>&1 | tee data_interim/noaa/ghcnh_hourly/clean_core/build_clean_core_run.log
+```
+
+Main output:
+
+```text
+data_interim/noaa/ghcnh_hourly/clean_core/ghcnh_hourly_clean_core_2004_2023.parquet
+```
+
+Expected current clean-core summary:
+
+```text
+rows: 3,345,498
+stations: 39
+time range: 2004-01-01 00:00:00 to 2023-12-31 23:00:00
+```
+
+---
+
+## 11. Clean-core rules to verify
+
+The strict clean core must satisfy these rules:
+
+1. No variable keeps suspect QC.
+2. Strong QC errors are dropped.
+3. Physically unreasonable values are dropped.
+4. Dew point greater than air temperature is dropped.
+5. Precipitation Source 382 / QC `A` is excluded from hourly precipitation.
+6. Legacy non-hourly precipitation reports such as `4-DSI-3240` are excluded.
+7. Sub-hourly precipitation reports are not summed blindly.
+8. Hourly precipitation aggregation uses `last_valid_report_in_hour`.
+9. Wind speed is limited to 50 m/s for the clean core.
+10. PWV is not included because it is not available directly from GHCNh.
+
+---
+
+## 12. Step 6 — Final physical checks
+
+After building the clean core, run:
+
+```bash
+python - <<'PY'
+import pandas as pd
+
+path = "data_interim/noaa/ghcnh_hourly/clean_core/ghcnh_hourly_clean_core_2004_2023.parquet"
+df = pd.read_parquet(path)
+
+cols = [
+    "temperature_c",
+    "dew_point_temperature_c",
+    "relative_humidity_pct",
+    "wind_speed_m_s",
+    "station_level_pressure_hpa",
+    "precipitation_mm",
+]
+
+print(df[cols].describe().T[["count", "min", "max", "mean"]])
+
+print("\nFinal checks:")
+print("T < 4 C:", (df["temperature_c"] < 4).sum())
+print("T > 41 C:", (df["temperature_c"] > 41).sum())
+print("Wind > 50 m/s:", (df["wind_speed_m_s"] > 50).sum())
+print("Precip > 150 mm:", (df["precipitation_mm"] > 150).sum())
+print("RH < 1:", (df["relative_humidity_pct"] < 1).sum())
+print("RH > 100:", (df["relative_humidity_pct"] > 100).sum())
+
+mask_td = (
+    df["temperature_c"].notna()
+    & df["dew_point_temperature_c"].notna()
+    & (df["dew_point_temperature_c"] > df["temperature_c"] + 0.5)
+)
+print("Td > T + 0.5 C:", mask_td.sum())
+PY
+```
+
+Expected current ranges:
+
+| Variable | Final clean range |
+|---|---:|
+| `temperature_c` | 14.0-40.0 °C |
+| `dew_point_temperature_c` | 2.0-31.0 °C |
+| `relative_humidity_pct` | 11-100 % |
+| `wind_speed_m_s` | 0.0-31.4 m/s |
+| `station_level_pressure_hpa` | 902.0-1024.4 hPa |
+| `precipitation_mm` | 0.0-101.9 mm |
+
+Expected final checks:
+
+```text
+T < 4 C: 0
+T > 41 C: 0
+Wind > 50 m/s: 0
+Precip > 150 mm: 0
+RH < 1: 0
+RH > 100: 0
+Td > T + 0.5 C: 0
+```
+
+If any of these checks fail, stop and inspect the clean-core script and decision summaries before continuing.
+
+---
+
+## 13. Step 7 — Build no-threshold coverage tables
+
+Run:
+
+```bash
+python scripts/build_ghcnh_hourly_clean_core_coverage_tables_pr.py
+```
+
+Output directory:
+
+```text
+data_interim/noaa/ghcnh_hourly/clean_core/coverage_no_thresholds/
+```
+
+Expected generated tables:
+
+```text
+ghcnh_hourly_clean_core_station_year_variable_coverage_no_thresholds.csv
+ghcnh_hourly_clean_core_station_year_variable_coverage_no_thresholds.parquet
+
+ghcnh_hourly_clean_core_station_year_coverage_wide_no_thresholds.csv
+ghcnh_hourly_clean_core_station_year_coverage_wide_no_thresholds.parquet
+
+ghcnh_hourly_clean_core_station_variable_summary_no_thresholds.csv
+ghcnh_hourly_clean_core_station_variable_summary_no_thresholds.parquet
+
+ghcnh_hourly_clean_core_variable_summary_no_thresholds.csv
+ghcnh_hourly_clean_core_variable_summary_no_thresholds.parquet
+```
+
+Expected station-year grid:
+
+```text
+39 stations × 20 years = 780 station-years
+```
+
+Expected no-threshold variable summary:
+
+| Variable | Station-years with any data | Stations with any data | Total valid hours | Fraction of all possible station-hours |
+|---|---:|---:|---:|---:|
+| `precipitation_mm` | 384 | 25 | 2,096,607 | 0.306634 |
+| `temperature_c` | 238 | 17 | 1,495,071 | 0.218658 |
+| `wind_speed_m_s` | 216 | 17 | 1,340,993 | 0.196124 |
+| `dew_point_temperature_c` | 127 | 9 | 693,016 | 0.101355 |
+| `relative_humidity_pct` | 127 | 9 | 692,829 | 0.101328 |
+| `station_level_pressure_hpa` | 66 | 5 | 362,616 | 0.053034 |
+
+These tables intentionally do **not** apply usability thresholds.
+
+---
+
+## 14. Step 8 — Check repository state
+
+After running the workflow, data outputs should remain untracked.
+
+Check Git:
+
+```bash
+git status --short
+```
+
+Expected tracked changes should only be in scripts or documentation when intentionally edited.
+
+Do not commit:
+
+```text
+data_raw/
+data_interim/
+outputs/
+logs/
+```
+
+---
+
+## 15. Current reproducible endpoint
+
+The current endpoint of the workflow is:
+
+```text
+GHCNh hourly clean core + no-threshold coverage tables
+```
+
+The main deliverables are:
+
+```text
+data_interim/noaa/ghcnh_hourly/clean_core/ghcnh_hourly_clean_core_2004_2023.parquet
+
+data_interim/noaa/ghcnh_hourly/clean_core/coverage_no_thresholds/
+```
+
+The main documentation references are:
+
+```text
+README.md
+docs/DATA_SOURCES.md
+docs/GHCNH_HOURLY_CLEAN_CORE.md
+docs/REPRODUCING.md
+docs/DECISIONS.md
+```
+
+---
+
+## 16. What not to run as the current workflow
+
+The repository still contains older ERA5, ERA5-Land, ISD, PRISM, mapping, and site-index scripts from previous prototype stages.
+
+Examples include scripts with names such as:
+
+```text
+phase1_*
+phase2_*
+phase3_*
+download_era5*
+download_noaa_isd*
+download_prism*
+```
+
+These scripts are retained for historical continuity and future reuse, but they are **not** the current GHCNh clean-core workflow.
+
+Do not treat older ERA5/ISD results as the current validated result of this branch.
+
+---
+
+## 17. Next methodological stage
+
+After the GHCNh clean-core workflow is fully documented, the next major stage is ERA5/reanalysis comparison.
+
+The ERA5 stage should use the clean GHCNh station data as the observational reference and should explicitly handle:
+
+1. Variable alignment.
+2. Time alignment.
+3. Spatial station-to-grid matching.
+4. Different station coverage by variable.
+5. Missing PWV in GHCNh.
+6. Puerto Rico coastal/grid-cell limitations.
+
+Do not start ERA5 comparison until the observational station data are clean, reproducible, and their coverage limitations are transparent.
