@@ -1,225 +1,427 @@
-# ARCHITECTURE.md
-# ngVLA Puerto Rico — Project Architecture
-# Last updated: April 9, 2026
-# Author: César Pollack, UPR Río Piedras
+# PR-ngVLA project architecture
+
+**Project:** PR-ngVLA
+**Current workflow stage:** GHCNh hourly clean core
+**Study period:** 2004-2023
+**Last updated:** April 2026
 
 ---
 
-## Overview
+## 1. Purpose
 
-This project performs a systematic atmospheric site characterization
-for ngVLA antenna placement in Puerto Rico. The codebase follows a
-strict separation between reusable library logic (`src/pr_ngvla/`)
-and phase-specific orchestration scripts (`scripts/`).
+This document describes the current project architecture for the PR-ngVLA workflow.
 
----
+The current active stage is:
 
-## Directory Structure
-
+```text
+GHCNh hourly clean core: strict QC + no-threshold coverage tables
 ```
+
+The current architecture is centered on building a reliable observational station dataset from NOAA GHCNh hourly data before comparison against ERA5 or other reanalysis products.
+
+Older phase-based ERA5, NOAA ISD, PRISM, fuzzy-index, and gap-fill scripts may still exist in the repository for historical continuity, but they are not the current active workflow for this branch.
+
+---
+
+## 2. Current architectural principle
+
+The project architecture follows this principle:
+
+```text
+raw data -> intermediate clean products -> documented reproducible outputs
+```
+
+The current workflow does not attempt to hide missing data or prematurely classify stations as usable/unusable. Instead, it builds:
+
+1. A strict hourly clean core.
+2. No-threshold station/year/variable coverage tables.
+3. Documentation describing assumptions, limitations, and decisions.
+
+---
+
+## 3. Current repository structure
+
+```text
 pr_ngvla/
-├── src/pr_ngvla/              ← Installable Python library (all logic here)
-│   ├── __init__.py
-│   ├── config.py              ← ALL paths, constants, CRS, bounding box
-│   ├── physics/
-│   │   └── thermodynamics.py  ← Magnus RH formula, dew point depression
-│   ├── data/
-│   │   ├── loaders.py         ← load_era5_monthly, load_era5_pwv, load_noaa_isd_stations
-│   │   ├── spatial.py         ← load_vector_data (returns 3 values!), load_dem
-│   │   └── temporal.py        ← monthly_climatology, precip_to_mm_month
-│   ├── analysis/
-│   │   ├── thresholds.py      ← THRESHOLDS dict + classify()
-│   │   ├── exceedance.py      ← monthly_exceedance_climatology, save_exceedance
-│   │   ├── validation.py      ← validate_station, compute_metrics, build_land_mask
-│   │   ├── fuzzy.py           ← linear_membership, composite_index, annual_composite
-│   │   └── gapfill.py         ← regrid_singlelev_to_era5land, merge_era5land_singlelev
-│   └── visualization/
-│       └── maps.py            ← mask_ocean, plot_base_map, style_axes_grid,
-│                                 add_colorbar, add_station_overlay, add_north_arrow
-│
-├── scripts/                   ← Orchestrators only (no logic, no hard-coding)
-│   ├── phase1_map_temperature.py
-│   ├── phase1_map_rh.py
-│   ├── phase1_map_tdep.py
-│   ├── phase1_map_wind.py
-│   ├── phase1_map_precip.py
-│   ├── phase1_map_dem.py
-│   ├── phase1_map_pwv.py
-│   ├── phase2_exceedance.py
-│   ├── phase2_validation.py
-│   ├── phase2_map_exceedance.py
-│   ├── phase3_composite_index.py
-│   ├── phase3_map_composite.py
-│   ├── phase3_best_regions_report.py
-│   ├── phase3_gapfill_singlelev.py
-│   └── phase3_map_gapfill.py
-│
-├── data_raw/                  ← RAW DATA — NEVER MODIFIED
-│   ├── era5/
-│   │   ├── monthly/           ← 2 NetCDF files (complete)
-│   │   ├── hourly/            ← 480 NetCDF files, ERA5-Land (complete)
-│   │   ├── singlelev/         ← 720 NetCDF files, ERA5-SL (complete)
-│   │   └── pwv/               ← 20 NetCDF files (complete)
-│   ├── noaa/isd/              ← 5 stations + catalog (complete)
-│   ├── dem/pr_dem_30m.tif     ← SRTM 30m DEM (complete)
-│   ├── shapefiles/
-│   │   ├── GSHHS_h_L1.shp    ← High-res coastline
-│   │   └── tl_2024_us_county/ ← TIGER municipalities
-│   └── prism/                 ← 39 .asc files, 1963-1995 normals
-│
-├── outputs/                   ← GENERATED — reproducible from scripts
-│   ├── maps/
-│   │   ├── phase1/            ← 7 monthly climatology PNGs
-│   │   ├── phase2/            ← 4 exceedance PNGs
-│   │   └── phase3/            ← site selection index PNGs
-│   ├── phase2/                ← exceedance NetCDFs + validation CSV
-│   ├── phase3/
-│   │   ├── composite_index_monthly.nc
-│   │   ├── composite_index_annual.nc
-│   │   ├── best_regions_annual.csv
-│   │   ├── best_regions_monthly.csv
-│   │   ├── best_municipalities.csv
-│   │   ├── best_regions_summary.txt
-│   │   └── gapfill/           ← gap-filled composites + provenance mask
-│   └── validation/
-│       └── era5_vs_isd_metrics.csv
-│
-├── docs/                      ← Scientific and technical documentation
-│   ├── ARCHITECTURE.md        ← This file
-│   ├── DECISIONS.md           ← Scientific and methodological decisions
-│   ├── BUGS_FIXED.md          ← Bug registry (prevents regressions)
-│   └── REPRODUCING.md         ← How to reproduce all results from scratch
-│
-└── pyproject.toml             ← Library installation config
-
+├── scripts/
+│   ├── build_ghcnh_hourly_clean_core_pr.py
+│   └── build_ghcnh_hourly_clean_core_coverage_tables_pr.py
+├── docs/
+│   ├── GHCNH_HOURLY_CLEAN_CORE.md
+│   ├── DATA_SOURCES.md
+│   ├── REPRODUCING.md
+│   ├── DECISIONS.md
+│   ├── ARCHITECTURE.md
+│   ├── FUTURE_WORK.md
+│   └── archive/
+├── data_raw/        # local raw data, not tracked
+├── data_interim/    # local intermediate products, not tracked
+├── outputs/         # local generated products, not tracked
+├── logs/            # local logs, not tracked
+├── src/
+├── tests/
+├── environment.yml
+├── pyproject.toml
+└── README.md
 ```
 
 ---
 
-## Core Design Rules
+## 4. Data directories
 
-### Rule 1 — Library vs Script separation
-- **Library** (`src/pr_ngvla/`): all reusable logic, functions, classes
-- **Scripts** (`scripts/`): orchestration only — load data, call library, save outputs
-- Scripts NEVER contain scientific logic. If logic appears in a script, move it to the library.
+### 4.1 `data_raw/`
 
-### Rule 2 — No hard-coding
-- ALL paths, constants, thresholds, CRS codes go in `config.py`
-- Scripts import from config. Never type a path or number directly in a script.
+`data_raw/` contains raw external datasets.
 
-### Rule 3 — Idempotent scripts
-- Every script can be run twice without breaking anything
-- Outputs are overwritten cleanly on re-run
-- No script depends on the state of a previous interactive session
+For the current GHCNh workflow, the main raw files are:
 
-### Rule 4 — spatial.py returns 3 values (CRITICAL)
-```python
-# ALWAYS unpack all 3:
-muni_clip, coast_union, muni_land_union = load_vector_data(COAST_SHP, MUNI_SHP)
-
-# coast_union      → GSHHS polygon, used for DRAWING coastline only
-# muni_land_union  → dissolved municipalities, used for OCEAN MASKING only
-# muni_clip        → clipped municipalities for map overlay
+```text
+data_raw/noaa/ghcnh/hourly/by_year/<YYYY>/parquet/GHCNh_<station>_<YYYY>.parquet
 ```
 
-### Rule 5 — Ocean masking
-```python
-# ALWAYS use muni_land_union for masking (NOT coast_union)
-# GSHHS has interior rings for coastal lagoons → white patches if used for masking
-mask_ocean(ax, muni_land_union)
+Raw data are not modified by scripts.
+
+Raw data are not tracked in Git.
+
+### 4.2 `data_interim/`
+
+`data_interim/` contains reproducible intermediate workflow products.
+
+Current important products:
+
+```text
+data_interim/noaa/ghcnh_station_inventory/pr_ghcnh_station_inventory_master.parquet
+
+data_interim/noaa/ghcnh_hourly/clean_core/ghcnh_hourly_clean_core_2004_2023.parquet
+
+data_interim/noaa/ghcnh_hourly/clean_core/coverage_no_thresholds/
 ```
 
-### Rule 6 — Library installation
-```bash
-# Library is installed in editable mode — NEVER use sys.path.insert
-cd /export/ngvla/cpollack/pr_ngvla
-pip install -e .
-python -c "import pr_ngvla; print(pr_ngvla.__version__)"
-```
+These products are generated from scripts and are not tracked in Git.
+
+### 4.3 `outputs/`
+
+`outputs/` is reserved for generated maps, figures, reports, and later analysis products.
+
+The current GHCNh clean-core stage does not depend on committing files from `outputs/`.
 
 ---
 
-## Data Flow
+## 5. Script architecture
 
-```
-data_raw/era5/hourly/          ─┐
-data_raw/era5/monthly/          │
-data_raw/era5/pwv/              ├─→ Phase 1 scripts → outputs/maps/phase1/
-data_raw/dem/                   │
-data_raw/shapefiles/           ─┘
+Scripts are used as reproducible workflow stages.
 
-data_raw/era5/hourly/          ─┐
-data_raw/noaa/isd/              ├─→ Phase 2 scripts → outputs/phase2/
-                               ─┘                  → outputs/maps/phase2/
+The current active scripts are:
 
-outputs/phase2/*.nc            ─┐
-                                ├─→ Phase 3A scripts → outputs/phase3/
-                               ─┘                   → outputs/maps/phase3/
-
-data_raw/era5/singlelev/       ─┐
-outputs/phase2/*.nc             ├─→ Phase 3B scripts → outputs/phase3/gapfill/
-outputs/phase3/*.nc            ─┘                   → outputs/maps/phase3/*_gf.png
+```text
+scripts/build_ghcnh_hourly_clean_core_pr.py
+scripts/build_ghcnh_hourly_clean_core_coverage_tables_pr.py
 ```
 
----
-
-## ERA5-SL File Structure (post-extraction)
-
-ERA5 single-levels files were downloaded as ZIP archives and extracted:
-
-```
-era5sl_hourly_t2m_d2m_PR_YYYY_MM.nc      ← t2m, d2m (instant)
-era5sl_hourly_wind_tp_sp_PR_YYYY_MM_instant.nc  ← u10, v10, sp
-era5sl_hourly_wind_tp_sp_PR_YYYY_MM_accum.nc    ← tp (accumulated)
-```
-
-Key difference from ERA5-Land files:
-- Time dimension is called `valid_time` (not `time`)
-- Grid: 4 lats × 13 lons (0.25° resolution)
-- ERA5-Land grid: 9 lats × 31 lons (0.1° resolution)
-
----
-
-## Gap-Fill Architecture (Phase 3B)
-
-```
-ERA5-Land exceedance (0.1°, 68 land px)
-         +
-ERA5-SL exceedance (0.25°, filtered by land fraction ≥60%)
-         ↓
-Land fraction mask (computed from PR municipality shapefile)
-         ↓
-Bilinear interpolation to ERA5-Land grid
-         ↓
-Merge: ERA5-Land primary, ERA5-SL for NaN gaps only
-         ↓
-Provenance mask saved (0=ocean, 1=ERA5-Land, 2=ERA5-SL)
-         ↓
-Composite site selection index (gap-filled)
-```
-
----
-
-## Compilation
+### 5.1 Clean-core builder
 
 ```bash
-# Presentation (server)
-cd /export/ngvla/cpollack/presentations/presentation_01/
-lualatex ngvla_pr_phase1.tex
-lualatex ngvla_pr_phase1.tex  # twice for ToC
+python scripts/build_ghcnh_hourly_clean_core_pr.py
+```
 
-# Sync maps to laptop
-rsync -avz --progress cpollack@astroiupi:/export/ngvla/cpollack/pr_ngvla/outputs/maps/ ./maps/
+Purpose:
+
+1. Read raw GHCNh station-year Parquet files.
+2. Apply strict quality-control rules.
+3. Apply physical consistency checks.
+4. Handle precipitation source-specific metadata.
+5. Aggregate observations to hourly clean records.
+6. Write the clean core and decision summaries.
+
+Main output:
+
+```text
+data_interim/noaa/ghcnh_hourly/clean_core/ghcnh_hourly_clean_core_2004_2023.parquet
+```
+
+### 5.2 Coverage-table builder
+
+```bash
+python scripts/build_ghcnh_hourly_clean_core_coverage_tables_pr.py
+```
+
+Purpose:
+
+1. Read the clean core.
+2. Build the full station-year grid.
+3. Generate station/year/variable coverage tables.
+4. Avoid applying usability thresholds.
+5. Write long, wide, station summary, and variable summary tables.
+
+Main output directory:
+
+```text
+data_interim/noaa/ghcnh_hourly/clean_core/coverage_no_thresholds/
 ```
 
 ---
 
-## Server Information
+## 6. Documentation architecture
 
-- **Host:** astroiupi | **User:** cpollack
-- **OS:** OpenSUSE Leap 15.6
-- **RAM:** 1 TB | **Cores:** 96 | **Disk:** 11 TB
-- **Conda env:** pr_ngvla
-- **Project root:** `/export/ngvla/cpollack/pr_ngvla/`
-- **Rule:** NEVER work in home/ — always use /export/ngvla/cpollack/
-- **Sessions:** tmux (NOT slurm/squeue)
+The current documentation is organized as follows:
+
+| Document | Role |
+|---|---|
+| `README.md` | High-level project status and current workflow summary |
+| `docs/GHCNH_HOURLY_CLEAN_CORE.md` | Main technical reference for the current clean-core stage |
+| `docs/DATA_SOURCES.md` | Data-source descriptions and local organization |
+| `docs/REPRODUCING.md` | Step-by-step reproduction guide |
+| `docs/DECISIONS.md` | Frozen methodological decisions |
+| `docs/ARCHITECTURE.md` | Project architecture |
+| `docs/FUTURE_WORK.md` | Current roadmap and next stages |
+| `docs/archive/` | Historical documentation from previous workflow stages |
+
+The current methodological reference for this branch is:
+
+```text
+docs/GHCNH_HOURLY_CLEAN_CORE.md
+```
+
+---
+
+## 7. Current data flow
+
+The current active data flow is:
+
+```text
+GHCNh metadata + station inventory
+        |
+        v
+Puerto Rico station inventory
+        |
+        v
+GHCNh station-year Parquet files, 2004-2023
+        |
+        v
+strict QC clean core
+        |
+        v
+no-threshold station/year/variable coverage tables
+        |
+        v
+documented observational reference for ERA5 comparison
+```
+
+More explicitly:
+
+```text
+data_raw/noaa/ghcnh/metadata/
+        |
+        v
+data_interim/noaa/ghcnh_station_inventory/
+        |
+        v
+data_raw/noaa/ghcnh/hourly/by_year/
+        |
+        v
+data_interim/noaa/ghcnh_hourly/clean_core/
+        |
+        v
+data_interim/noaa/ghcnh_hourly/clean_core/coverage_no_thresholds/
+```
+
+---
+
+## 8. Clean-core rules encoded in the architecture
+
+The clean-core stage is conservative.
+
+Current architectural rules:
+
+1. Do not retain suspect QC for any variable.
+2. Do not retain strong QC errors.
+3. Do not use numeric values without metadata interpretation.
+4. Do not treat all precipitation values as equivalent.
+5. Do not sum sub-hourly precipitation blindly.
+6. Do not retain Source 382 / QC `A` precipitation as hourly rainfall.
+7. Do not apply usability thresholds in the general coverage tables.
+8. Do not include PWV in GHCNh because GHCNh does not provide PWV directly.
+9. Do not advance to ERA5 comparison until station coverage is documented.
+
+---
+
+## 9. Current clean-core variables
+
+The current clean core retains:
+
+| Clean column | Unit |
+|---|---:|
+| `temperature_c` | °C |
+| `dew_point_temperature_c` | °C |
+| `relative_humidity_pct` | % |
+| `wind_speed_m_s` | m/s |
+| `station_level_pressure_hpa` | hPa |
+| `precipitation_mm` | mm |
+
+PWV is not part of the GHCNh clean core.
+
+---
+
+## 10. Current clean-core endpoint
+
+The current reproducible endpoint is:
+
+```text
+GHCNh hourly clean core + no-threshold coverage tables
+```
+
+Current clean-core table:
+
+```text
+data_interim/noaa/ghcnh_hourly/clean_core/ghcnh_hourly_clean_core_2004_2023.parquet
+```
+
+Current no-threshold coverage directory:
+
+```text
+data_interim/noaa/ghcnh_hourly/clean_core/coverage_no_thresholds/
+```
+
+Current clean value ranges:
+
+| Variable | Final clean range |
+|---|---:|
+| `temperature_c` | 14.0-40.0 °C |
+| `dew_point_temperature_c` | 2.0-31.0 °C |
+| `relative_humidity_pct` | 11-100 % |
+| `wind_speed_m_s` | 0.0-31.4 m/s |
+| `station_level_pressure_hpa` | 902.0-1024.4 hPa |
+| `precipitation_mm` | 0.0-101.9 mm |
+
+---
+
+## 11. No-threshold coverage endpoint
+
+The full station-year grid is:
+
+```text
+39 stations × 20 years = 780 station-years
+```
+
+Current no-threshold variable summary:
+
+| Variable | Station-years with any data | Stations with any data | Total valid hours | Fraction of all possible station-hours |
+|---|---:|---:|---:|---:|
+| `precipitation_mm` | 384 | 25 | 2,096,607 | 0.306634 |
+| `temperature_c` | 238 | 17 | 1,495,071 | 0.218658 |
+| `wind_speed_m_s` | 216 | 17 | 1,340,993 | 0.196124 |
+| `dew_point_temperature_c` | 127 | 9 | 693,016 | 0.101355 |
+| `relative_humidity_pct` | 127 | 9 | 692,829 | 0.101328 |
+| `station_level_pressure_hpa` | 66 | 5 | 362,616 | 0.053034 |
+
+These summaries do not apply station usability thresholds.
+
+---
+
+## 12. Relationship to ERA5
+
+ERA5 and/or ERA5-Land are not the current primary data source in this branch.
+
+The next major stage is ERA5/reanalysis comparison using the clean GHCNh station data as the observational reference.
+
+The ERA5 architecture should be designed after the observational coverage limitations are understood.
+
+The future ERA5 stage must handle:
+
+1. Variable alignment.
+2. Time alignment.
+3. Spatial station-to-grid matching.
+4. Different station coverage by variable.
+5. Missing PWV in GHCNh.
+6. Puerto Rico coastal and grid-cell limitations.
+
+---
+
+## 13. Older prototype scripts
+
+Older scripts may remain in the repository, including scripts related to:
+
+```text
+phase1_*
+phase2_*
+phase3_*
+download_era5*
+download_noaa_isd*
+download_prism*
+```
+
+These scripts are retained for historical continuity and future reference, but they are not the current active workflow for the GHCNh clean-core stage.
+
+Do not treat older ERA5/ISD outputs as current validated results.
+
+---
+
+## 14. Server and execution architecture
+
+Recommended project root:
+
+```text
+/export/ngvla/cpollack/pr_ngvla
+```
+
+Recommended environment:
+
+```bash
+conda activate pr_ngvla
+```
+
+Long jobs should be run in `tmux`.
+
+Example:
+
+```bash
+tmux new -s ghcnh_clean_core
+python scripts/build_ghcnh_hourly_clean_core_pr.py
+```
+
+Detach:
+
+```text
+Ctrl-b then d
+```
+
+Reconnect:
+
+```bash
+tmux attach -t ghcnh_clean_core
+```
+
+---
+
+## 15. Git and reproducibility rules
+
+Git should track:
+
+```text
+scripts/
+docs/
+src/
+tests/
+environment.yml
+pyproject.toml
+README.md
+```
+
+Git should not track:
+
+```text
+data_raw/
+data_interim/
+outputs/
+logs/
+```
+
+The project should be reproducible through scripts and documentation, not by committing large data products.
+
+---
+
+## 16. Next architecture step
+
+After this documentation stage, the next architecture task is to design the ERA5/reanalysis comparison stage.
+
+That stage should be added incrementally and should not overwrite the frozen GHCNh clean-core architecture.
