@@ -1,268 +1,336 @@
-# DATA_SOURCES.md
-# ngVLA Puerto Rico — Data Sources and Download Instructions
-# Last updated: April 2026
-# Author: César Pollack, UPR Río Piedras
+# Data sources for PR-ngVLA
+
+**Project:** PR-ngVLA
+**Current workflow stage:** GHCNh hourly clean core
+**Study period:** 2004-2023
+**Last updated:** April 2026
 
 ---
 
-## Overview
+## 1. Purpose of this document
 
-This project uses four primary data sources. None of the raw data is included
-in the repository (~300 GB total). This document explains what each dataset is,
-why we use it, where to get it, and how it is organized on the server.
+This document summarizes the data sources used or planned in the PR-ngVLA atmospheric site characterization workflow.
+
+The current active observational-data workflow is based on **NOAA GHCNh hourly station data** for Puerto Rico. Earlier documentation and prototype workflows may mention NOAA ISD, ERA5-first processing, or mixed-resolution validation prototypes; those should be treated as historical context unless they are explicitly updated in the current documentation.
+
+The current methodological reference for the observational workflow is:
+
+```text
+docs/GHCNH_HOURLY_CLEAN_CORE.md
+```
 
 ---
 
-## What is ERA5? What is reanalysis?
+## 2. Current primary observational dataset
 
-A **reanalysis** is a reconstruction of past atmospheric conditions produced
-by running a numerical weather prediction (NWP) model over historical periods,
-assimilating all available observations (satellites, radiosondes, surface
-stations, aircraft). The result is a physically consistent, spatially complete
-gridded dataset of all atmospheric variables at regular time intervals.
+### 2.1 NOAA GHCNh hourly
 
-The advantage over station data: global coverage, no gaps, all variables
-available at every grid point. The limitation: values represent a grid-cell
-average (~9 km for ERA5-Land), not a point measurement.
+The current primary observational dataset is:
 
-**ERA5** is the fifth generation reanalysis produced by ECMWF (European Centre
-for Medium-Range Weather Forecasts). It is currently the gold standard for
-atmospheric reanalysis and is used in astronomical site characterization
-studies worldwide (Bi et al. 2024, MNRAS).
+**NOAA Global Historical Climatology Network hourly (GHCNh)**
+
+GHCNh replaces the legacy Global Hourly / Integrated Surface Dataset (ISD) product and provides hourly station data with associated metadata fields for each variable.
+
+In this project, GHCNh is used to build a clean, physically meaningful hourly station dataset before comparison against reanalysis products such as ERA5.
+
+### 2.2 Local raw-data organization
+
+Raw station-year Parquet files are stored locally as:
+
+```text
+data_raw/noaa/ghcnh/hourly/by_year/<YYYY>/parquet/GHCNh_<station>_<YYYY>.parquet
+```
+
+The current study period is:
+
+```text
+2004-2023
+```
+
+The current Puerto Rico GHCNh raw archive contains station-year files downloaded by year and station.
+
+Raw data are not tracked in Git.
 
 ---
 
-## Dataset 1 — ERA5-Land (primary dataset)
+## 3. Station inventory
 
-**What it is:** A land-surface enhanced version of ERA5. ECMWF runs the HTESSEL
-land surface model forced by ERA5 atmospheric fields at higher spatial resolution,
-specifically optimized for land surface variables.
+The Puerto Rico GHCNh station inventory is stored as:
 
-**Why we use it:**
-- Highest resolution publicly available reanalysis for land (~9 km)
-- Provides all 7 ngVLA study variables with hourly temporal resolution
-- Globally validated (Muñoz-Sabater et al. 2021)
-- Used as the gold standard in astronomical site characterization
-
-**Important limitation:** ERA5-Land assigns NaN to coastal pixels where the
-land fraction within the ~9 km cell falls below an internal ECMWF threshold.
-This affects Lajas, Guánica, and parts of the SW coast — addressed in Phase 3B.
-
-**Variables downloaded:**
-- `t2m` — 2m air temperature [K]
-- `d2m` — 2m dew point temperature [K] (used to compute RH and T−Td)
-- `u10`, `v10` — 10m wind components [m/s]
-- `tp` — total precipitation [m/hour accumulated]
-- `sp` — surface pressure [Pa] (input to PWV retrieval)
-
-**Resolution:** 0.1° × 0.1° (~9 km), hourly, 2004–2023
-
-**Bounding box:** lat 17.5–18.6°N, lon −68.0 to −65.0°W
-
-**Files on server:**
+```text
+data_interim/noaa/ghcnh_station_inventory/pr_ghcnh_station_inventory_master.parquet
 ```
-data_raw/era5/hourly/
-    era5land_hourly_t2m_d2m_PR_YYYY_MM.nc          ← temperature + dew point
-    era5land_hourly_wind_tp_sp_PR_YYYY_MM.nc        ← wind + precip + pressure
-data_raw/era5/monthly/
-    era5land_monthly_t2m_d2m_PR_2004_2023.nc
-    era5land_monthly_wind_tp_sp_PR_2004_2023.nc
+
+This inventory is used to define the full station-year coverage grid.
+
+Current full station-year grid:
+
+```text
+39 stations × 20 years = 780 station-years
 ```
-Total: 480 hourly files + 2 monthly files
 
-**Download script:** `scripts/download_era5land_hourly_pr.py`
-
-**Source:** https://cds.climate.copernicus.eu  
-Dataset: `reanalysis-era5-land`  
-Access: free account required, terms of use must be accepted
+Intermediate inventory products are local workflow outputs and are not tracked in Git.
 
 ---
 
-## Dataset 2 — ERA5 Single-Levels (PWV and gap-fill)
+## 4. Variables used from GHCNh
 
-**What it is:** ERA5 at standard (~28 km) resolution, extracted at the single
-level closest to the surface. Unlike ERA5-Land, it covers both land and ocean
-and provides total column water vapor (TCWV = PWV).
+The current clean core retains six variables:
 
-**Why we use it:**
-- ERA5-Land does not provide total column water vapor
-- TCWV is validated against GNSS and radiosondes with correlation >0.99
-  (Zhang et al. 2019)
-- Used as secondary source for coastal pixel gap-fill (Phase 3B)
-
-**Variables downloaded:**
-- `tcwv` — total column water vapor [kg/m² = mm PWV]
-- `t2m`, `d2m`, `u10`, `v10`, `tp`, `sp` — for gap-fill only
-
-**Resolution:** 0.25° × 0.25° (~28 km), hourly, 2004–2023
-
-**Files on server:**
-```
-data_raw/era5/pwv/
-    era5_hourly_tcwv_PR_YYYY.nc                    ← one file per year
-data_raw/era5/singlelev/
-    era5sl_hourly_t2m_d2m_PR_YYYY_MM.nc
-    era5sl_hourly_wind_tp_sp_PR_YYYY_MM_instant.nc
-    era5sl_hourly_wind_tp_sp_PR_YYYY_MM_accum.nc
-```
-Total: 20 PWV files + ~720 singlelev files
-
-**Download scripts:**
-- `scripts/download_era5_pwv_pr.py`
-- `scripts/download_era5_singlelev_pr.py`
-
-**Source:** https://cds.climate.copernicus.eu  
-Dataset: `reanalysis-era5-single-levels`
-
-**Key difference from ERA5-Land files:**
-ERA5-SL uses `valid_time` as the time dimension name, not `time`.
-This is handled in `src/pr_ngvla/data/loaders.py`.
-
----
-
-## Dataset 3 — NOAA ISD (validation stations)
-
-**What it is:** The NOAA Integrated Surface Database — hourly surface
-meteorological observations from airport and military weather stations.
-
-**Why we use it:** To validate ERA5-Land against in-situ observations in PR.
-These are the only stations with continuous hourly records for our study period.
-
-**Limitation:** All 5 stations are coastal and at airports or military bases.
-No mountain stations exist in the Cordillera Central — the validation does not
-cover the interior highlands.
-
-**The 5 stations:**
-
-| Station ID | Name | Location | ICAO |
-|---|---|---|---|
-| 785140-11603 | Rafael Hernández Airport | Aguadilla (NW) | TJBQ |
-| 785145-11653 | Eugenio María de Hostos Airport | Mayagüez (W) | TJMZ |
-| 785260-11641 | Luis Muñoz Marín International | San Juan (NE) | TJSJ |
-| 785265-00494 | Fernando Luis Ribas Dominicci | Isla Grande, SJ (NE) | TJIG |
-| 785350-11630 | Naval Station Roosevelt Roads | Ceiba (E) | TJNR |
-
-**Files on server:**
-```
-data_raw/noaa/isd/
-    station_catalog.csv                            ← station metadata
-    station_inventory.csv                          ← availability summary
-    785140-11603_RAFAEL_HERNANDEZ_AIRPORT.csv
-    785145-11653_EUGENIO_MARIA_DE_HOSTOS_AIRPOR.csv
-    785260-11641_LUIS_MUNOZ_MARIN_INTERNATIONAL.csv
-    785265-00494_FERNANDO_LUIS_RIBAS_DOMINICCI_.csv
-    785350-11630_NAVAL_STATION_ROOSEVELT_ROADS_.csv
-```
-
-**Download script:** `scripts/download_noaa_isd_pr.py`
-
-**Source:** https://www.ncei.noaa.gov/products/land-based-station/integrated-surface-database  
-Access: free, no account required
-
----
-
-## Dataset 4 — Digital Elevation Model (DEM)
-
-**What it is:** A 30-meter resolution elevation grid of Puerto Rico derived
-from the SRTM (Shuttle Radar Topography Mission) / Copernicus DEM.
-
-**Why we use it:**
-- Context map (Cordillera Central topography)
-- Future work: lapse rate temperature correction (Phase 4)
-
-**File on server:**
-```
-data_raw/dem/pr_dem_30m.tif     ← single GeoTIFF, EPSG:4326
-```
-
-**Source:** https://opentopography.org or Copernicus DEM at ESA  
-Access: free, registration may be required
-
----
-
-## Dataset 5 — Shapefiles (vector boundaries)
-
-These are used for map rendering — not ERA5 data.
-
-| File | Description | Source |
+| Clean column | GHCNh source variable | Unit |
 |---|---|---|
-| `GSHHS_h_L1.shp` | High-resolution coastline | GSHHG (NOAA) |
-| `tl_2024_us_county/` | PR municipality boundaries | US Census TIGER/Line 2024 |
+| `temperature_c` | `temperature` | degrees Celsius |
+| `dew_point_temperature_c` | `dew_point_temperature` | degrees Celsius |
+| `relative_humidity_pct` | `relative_humidity` | percent |
+| `wind_speed_m_s` | `wind_speed` | meters per second |
+| `station_level_pressure_hpa` | `station_level_pressure` | hPa |
+| `precipitation_mm` | `precipitation` | millimeters |
 
-**Files on server:**
-```
-data_raw/shapefiles/
-    GSHHS_h_L1.shp (.dbf .prj .shx)
-    tl_2024_us_county/
-        tl_2024_us_county.shp (.dbf .prj .shx .cpg)
-```
-
-**Sources:**
-- GSHHG coastline: https://www.soest.hawaii.edu/pwessel/gshhg/
-- TIGER/Line: https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html
+PWV is **not** directly available from GHCNh.
 
 ---
 
-## Dataset 6 — PRISM (independent precipitation validation)
+## 5. Required GHCNh metadata fields
 
-**What it is:** Parameter-elevation Regressions on Independent Slopes Model.
-A 450-meter resolution precipitation climatology derived from station observations,
-covering Puerto Rico 1963–1995.
+Each GHCNh variable is accompanied by five metadata fields:
 
-**Why we use it:** Independent spatial validation of ERA5 precipitation patterns.
-Not used in the main analysis — used only to confirm that ERA5 captures the
-correct spatial gradient (wet NE, dry SW).
-
-**Important limitation:** PRISM confirmed they will not update PR normals
-(indefinitely on hold). The period mismatch (PRISM 1963–1995 vs ERA5 2004–2023)
-means quantitative comparison is not valid — spatial pattern validation only.
-
-**Files on server:**
-```
-data_raw/prism/
-    PRISM_ppt_pr_1963-1995_normal_450mM1_MM_asc.asc   ← monthly (12 files)
-    PRISM_ppt_pr_1963-1995_normal_450mM1_annual_asc.asc
+```text
+variable_Measurement_Code
+variable_Quality_Code
+variable_Report_Type
+variable_Source_Code
+variable_Source_Station_ID
 ```
 
-**Source:** https://prism.oregonstate.edu  
-Access: free
+These metadata fields are essential for interpreting the observations.
+
+The clean core should not be interpreted using numeric values alone.
 
 ---
 
-## Storage summary
+## 6. Clean-core output
 
-| Dataset | Location | Size | Files |
-|---|---|---|---|
-| ERA5-Land hourly | `data_raw/era5/hourly/` | ~200 GB | 480 |
-| ERA5-Land monthly | `data_raw/era5/monthly/` | ~2 MB | 2 |
-| ERA5 Single-Levels | `data_raw/era5/singlelev/` | ~80 GB | ~720 |
-| ERA5 PWV | `data_raw/era5/pwv/` | ~500 MB | 20 |
-| NOAA ISD | `data_raw/noaa/isd/` | ~50 MB | 7 |
-| DEM | `data_raw/dem/` | ~150 MB | 1 |
-| Shapefiles | `data_raw/shapefiles/` | ~50 MB | ~10 |
-| PRISM | `data_raw/prism/` | ~5 MB | 27 |
-| **Total** | | **~300 GB** | |
+The strict clean core is generated by:
+
+```bash
+python scripts/build_ghcnh_hourly_clean_core_pr.py
+```
+
+Main output:
+
+```text
+data_interim/noaa/ghcnh_hourly/clean_core/ghcnh_hourly_clean_core_2004_2023.parquet
+```
+
+Decision summaries and supporting outputs are written under:
+
+```text
+data_interim/noaa/ghcnh_hourly/clean_core/
+```
+
+These outputs are local workflow products and are not tracked in Git.
 
 ---
 
-## Download order (important)
+## 7. No-threshold coverage tables
 
-Download in this order — later steps depend on earlier ones:
+Coverage tables are generated by:
 
-```
-1. Shapefiles     → needed by all map scripts
-2. DEM            → needed by phase1_map_dem.py
-3. NOAA ISD       → needed by phase2_validation.py and all map scripts
-4. ERA5 monthly   → needed by Phase 1 (fast, minutes)
-5. ERA5 PWV       → needed by Phase 1 PWV map and Phase 2 PWV exceedance
-6. ERA5 hourly    → needed by Phase 2 exceedance (slow, several days)
-7. ERA5 singlelev → needed by Phase 3B gap-fill (slow, several days)
-8. PRISM          → optional, validation only
+```bash
+python scripts/build_ghcnh_hourly_clean_core_coverage_tables_pr.py
 ```
 
-The monthly ERA5 data (~2 MB) is sufficient to test the entire Phase 1
-pipeline while the hourly data downloads in the background.
+Output directory:
+
+```text
+data_interim/noaa/ghcnh_hourly/clean_core/coverage_no_thresholds/
+```
+
+The coverage tables intentionally do **not** apply usability thresholds. They report factual coverage by station, year, and variable.
+
+Generated tables:
+
+```text
+ghcnh_hourly_clean_core_station_year_variable_coverage_no_thresholds.csv
+ghcnh_hourly_clean_core_station_year_variable_coverage_no_thresholds.parquet
+
+ghcnh_hourly_clean_core_station_year_coverage_wide_no_thresholds.csv
+ghcnh_hourly_clean_core_station_year_coverage_wide_no_thresholds.parquet
+
+ghcnh_hourly_clean_core_station_variable_summary_no_thresholds.csv
+ghcnh_hourly_clean_core_station_variable_summary_no_thresholds.parquet
+
+ghcnh_hourly_clean_core_variable_summary_no_thresholds.csv
+ghcnh_hourly_clean_core_variable_summary_no_thresholds.parquet
+```
+
+Current no-threshold variable summary:
+
+| Variable | Station-years with any data | Stations with any data | Total valid hours | Fraction of all possible station-hours |
+|---|---:|---:|---:|---:|
+| `precipitation_mm` | 384 | 25 | 2,096,607 | 0.306634 |
+| `temperature_c` | 238 | 17 | 1,495,071 | 0.218658 |
+| `wind_speed_m_s` | 216 | 17 | 1,340,993 | 0.196124 |
+| `dew_point_temperature_c` | 127 | 9 | 693,016 | 0.101355 |
+| `relative_humidity_pct` | 127 | 9 | 692,829 | 0.101328 |
+| `station_level_pressure_hpa` | 66 | 5 | 362,616 | 0.053034 |
 
 ---
 
-*Last updated: April 2026 — César Pollack, UPR Río Piedras / CARSE*
+## 8. GHCNh precipitation notes
+
+Precipitation is the most delicate GHCNh variable in the current workflow.
+
+The GHCNh `precipitation` variable is nominally hourly, but it can include intermediate reports and legacy accumulation behavior.
+
+Important project rules:
+
+1. Sub-hourly reports are not summed blindly.
+2. The clean hourly aggregation uses `last_valid_report_in_hour`.
+3. Source 382 / QC `A` precipitation is excluded because it is not an hourly total.
+4. Legacy non-hourly reports such as `4-DSI-3240` are excluded from the hourly clean precipitation variable.
+5. Source 382 `H-derived-HPD-C-high-res` reports with blank QC are retained unless another rule fails.
+
+The current strict clean-core maximum retained precipitation value is:
+
+```text
+101.9 mm
+```
+
+This is treated as an extreme retained hourly value after QC, not as a typical condition.
+
+---
+
+## 9. NOAA Hourly Normals 2006-2020
+
+NOAA 2006-2020 U.S. Hourly Normals are not the main observational dataset in the current clean-core workflow.
+
+They may be used as an auxiliary climatological reference for interpreting expected hourly behavior and for checking the plausibility of station observations.
+
+Important methodological note:
+
+```text
+Dew point greater than air temperature is invalid for normals computation.
+```
+
+This supports the clean-core consistency rule:
+
+```text
+dew_point_temperature_c <= temperature_c + 0.5 °C
+```
+
+---
+
+## 10. USGS Climate of Puerto Rico
+
+The USGS “Climate of Puerto Rico” page is used as contextual climate reference for Puerto Rico:
+
+```text
+https://www.usgs.gov/centers/cfwsc/science/climate-puerto-rico
+```
+
+Important points for this project:
+
+1. Puerto Rico has strong spatial precipitation gradients.
+2. The Cordillera Central and Sierra de Cayey separate wetter northern/eastern regions from drier southern regions.
+3. Mean monthly temperatures vary relatively little during the year.
+4. Annual precipitation ranges from dry southern/coastal regions to very wet mountain and Luquillo-region climates.
+
+This reference is useful for interpreting whether cleaned station values are climatically plausible, especially for precipitation and temperature.
+
+---
+
+## 11. Geospatial auxiliary datasets
+
+These datasets are not part of the GHCNh hourly clean core, but they are used for mapping, spatial context, and visualization.
+
+| Dataset | Source | Use in project |
+|---|---|---|
+| SRTM 1-Arcsecond Global DEM | NASA EOSDIS / Earthdata | Elevation background and terrain context for Puerto Rico maps |
+| GSHHG coastline | NOAA NCEI | Coastline geometry for map boundaries and coastal reference |
+| TIGER/Line 2023 county/municipality boundaries | U.S. Census Bureau | Puerto Rico municipality boundaries and administrative reference |
+
+Known source pages:
+
+```text
+SRTM 1-Arcsecond Global DEM:
+https://earthdata.nasa.gov/
+
+GSHHG coastline:
+https://www.ngdc.noaa.gov/mgg/shorelines/gshhs.html
+
+TIGER/Line shapefiles:
+https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html
+```
+
+These layers do **not** define meteorological values and are not used for GHCNh quality control. They support cartography and spatial interpretation.
+
+---
+
+## 12. ERA5 and ERA5-Land
+
+ERA5 and/or ERA5-Land are planned for the next major methodological stage.
+
+At the current stage, ERA5 is **not** the primary dataset. The current priority is to finish documenting and understanding the GHCNh observational station record.
+
+Expected future uses of ERA5/reanalysis products:
+
+1. Compare gridded reanalysis fields against cleaned GHCNh station observations.
+2. Evaluate spatial patterns across Puerto Rico.
+3. Support variables not available directly from GHCNh, especially PWV.
+4. Provide spatial continuity where station coverage is limited.
+
+The ERA5 stage should proceed only after the GHCNh clean-core workflow is documented, reproducible, and its coverage limitations are transparent.
+
+---
+
+## 13. NOAA ISD / Global Hourly
+
+NOAA ISD / Global Hourly is the legacy product replaced by GHCNh.
+
+Earlier prototype workflows and documents may refer to NOAA ISD or a small set of NOAA ISD stations. Those references should be treated as historical context unless explicitly updated.
+
+For the current branch, the active observational station workflow is GHCNh hourly, not a separate ISD workflow.
+
+---
+
+## 14. Data tracking policy
+
+Large raw and intermediate data files are not tracked in Git.
+
+Not tracked:
+
+```text
+data_raw/
+data_interim/
+outputs/
+logs/
+```
+
+Tracked:
+
+```text
+scripts/
+docs/
+src/
+tests/
+environment.yml
+pyproject.toml
+README.md
+```
+
+The workflow should remain reproducible through scripts and documentation, not through committing large data products.
+
+---
+
+## 15. Current status
+
+Current active data-source status:
+
+```text
+Primary observational dataset: NOAA GHCNh hourly
+Current clean product: GHCNh hourly clean core 2004-2023
+Coverage reporting: no-threshold station-year-variable tables
+Geospatial support: SRTM DEM, GSHHG coastline, TIGER/Line boundaries
+Next major stage: ERA5/reanalysis comparison
+```
