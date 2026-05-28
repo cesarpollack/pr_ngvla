@@ -382,3 +382,135 @@ September 2020  # wet-season example
 ```
 
 September 2017 should be handled separately only if the project explicitly decides to examine Hurricane María-related observing-system behavior.
+---
+
+## 15. CUON as a public partial route for upper-air observation feedback
+
+The In situ Comprehensive Upper-Air Observation Network (CUON) is a useful public route for the PR-ngVLA project, but only for the upper-air component of the observing system.
+
+CUON should be treated as a partial and source-specific complement to the ERA5 Observation Feedback Archive / ODB / MARS route. It does not replace full observation-feedback access for the complete ERA5 observing system.
+
+### 15.1 What CUON can support
+
+CUON can support investigation of conventional upper-air observations, including:
+
+- radiosonde observations,
+- pilot balloon observations,
+- ozonesonde observations,
+- vertical profiles of temperature, humidity, and wind-related variables.
+
+For PR-ngVLA, this is relevant because upper-air observations can be used to investigate vertical thermodynamic and wind information over or near Puerto Rico, especially for comparison with ERA5 atmospheric fields and total column water vapour / precipitable water analyses.
+
+CUON is particularly relevant for a controlled pilot study of the Puerto Rico upper-air station after confirming the correct station identifier, time coverage, variables, and data availability in the downloaded files.
+
+### 15.2 Why CUON is not a complete replacement for MARS/OFA
+
+CUON is not sufficient for the full observing-system question of this stage.
+
+It does not provide a complete regional inventory of all observation classes considered by ERA5, such as:
+
+- SYNOP / METAR / ASOS surface observations,
+- marine observations from ships and buoys,
+- aircraft / AMDAR observations,
+- satellite radiances,
+- atmospheric motion vectors,
+- scatterometer winds,
+- GNSS radio occultation observations,
+- full active/passive/rejected/blocklisted status information for all observation classes.
+
+Therefore, the ECMWF Support request for ERA5 Observation Feedback Archive / ODB / MARS access remains necessary.
+
+### 15.3 CUON data sources relevant to ERA5
+
+The CUON Product User Guide identifies multiple source collections used to build the merged CUON database. These include ERA5-related analysis input and feedback sources as well as other upper-air archives such as IGRA2, NCAR, BUFR, HARA, and related historical collections.
+
+The ERA5-related source identifiers listed in the CUON Product User Guide include:
+
+| Source ID | Description in CUON Product User Guide |
+|---|---|
+| `ERA5_1` | ERA5 analysis input and feedback since 1979 |
+| `ERA5_2` | ERA5 analysis input and feedback for years before 1940 |
+| `ERA5_175` | Analysis input for ERA5 received from NCAR, superseded by ERA5_2 except for years before 1940 |
+| `ERA5_176` | Analysis input for ERA5 received from NCAR, superseded by ERA5_2 except for years before 1940 |
+
+Implication:
+
+```text
+CUON can provide a public and documented route to some ERA5-related upper-air
+observation-feedback information, but only for upper-air observations represented
+in the CUON product.
+```
+
+### 15.4 Variables and metadata useful for PR-ngVLA
+
+The CUON Product User Guide lists requestable variables such as:
+
+- `air_temperature`,
+- `air_dewpoint`,
+- `dew_point_depression`,
+- `relative_humidity`,
+- `specific_humidity`,
+- `wind_speed`,
+- `wind_from_direction`,
+- `eastward_wind_speed`,
+- `northward_wind_speed`,
+- `geopotential_height`.
+
+Useful metadata and feedback-related fields include:
+
+- `observed_variable`,
+- `observation_value`,
+- `latitude`,
+- `longitude`,
+- `z_coordinate`,
+- `report_timestamp`,
+- `record_timestamp`,
+- `source_id`,
+- `primary_station_id`,
+- `station_name`,
+- `sensor_id`,
+- `quality_flag`,
+- `an_depar@body`,
+- `fg_depar@body`,
+- `fg_depar@offline`,
+- `uncertainty_value1`.
+
+These fields may support a controlled upper-air pilot study, especially if the downloaded records include ERA5-related source IDs and departure fields.
+
+### 15.5 Important interpretation limits
+
+The departure fields must be interpreted carefully.
+
+The CUON Product User Guide distinguishes between departures from the ERA5 analysis and departures from the ERA5 background / first guess. These fields are not equivalent to a general active/passive/rejected/blocklisted status inventory for all ERA5 observations.
+
+Therefore, the project should not use CUON alone to claim that a specific observation was actively assimilated by ERA5 unless the relevant CUON fields and documentation support that interpretation for the specific record.
+
+Recommended wording:
+
+```text
+CUON provides public access to harmonized upper-air observations and, for some
+records, ERA5-related departure information. It can be used as a partial route
+for upper-air validation and feedback-oriented analysis, but it does not replace
+the full ERA5 Observation Feedback Archive / ODB / MARS records needed to
+establish active/passive/rejected/blocklisted status across the full observing system.
+```
+
+### 15.6 Practical next step after documentation
+
+The next practical step, after this documentation is committed and after the project owner gives explicit instruction to continue, should be a small CUON pilot request.
+
+The pilot should not download the full 2004–2023 period first. It should first verify:
+
+- whether the Puerto Rico upper-air station is present in CUON,
+- the correct station identifier,
+- which variables are available,
+- which source IDs appear,
+- whether `an_depar@body`, `fg_depar@body`, and/or `fg_depar@offline` are populated,
+- whether the data volume is manageable,
+- whether the downloaded files can be filtered cleanly by station, variable, level, and date.
+
+No CUON processing script should be written until the pilot design is explicitly approved.
+
+### 15.7 Source for this section
+
+- ECMWF / Copernicus Support Portal. *In situ Comprehensive Upper-Air Observation Network (CUON): Product User Guide (PUG)*, version 1.1, issued 30/06/2025.
