@@ -370,36 +370,246 @@ GHCNh is the current preferred hourly/synoptic surface dataset. ISD may remain a
 
 ## 8. NDBC
 
-### Status
+### 8.1 Status
 
-Candidate for next download.
+Downloaded and minimally verified.
 
-### Expected use
+### 8.2 Source
 
-Coastal/marine meteorological context, especially wind, pressure, air temperature, sea-surface temperature, and related variables depending on station availability.
+NOAA/NDBC historical standard meteorological data (`stdmet`).
 
-Recommended classification:
+Official source structure used:
+
+```text
+https://www.ndbc.noaa.gov/data/historical/stdmet/
+https://www.ndbc.noaa.gov/station_page.php?station=<station_id>
+https://www.ndbc.noaa.gov/station_history.php?station=<station_id>
+```
+
+### 8.3 Methodological use
+
+NDBC provides buoy and coastal-station meteorological observations.
+
+For this project, NDBC should be treated as:
 
 ```text
 physical_context / partial_comparison
 ```
 
-Possible relation:
+Expected uses:
 
-- useful for coastal context;
-- possible comparison with ERA5 Single Levels;
-- not direct validation of inland ERA5-Land pixels.
+- coastal and marine meteorological context;
+- wind speed and wind direction near Puerto Rico waters;
+- pressure, air temperature, sea-surface temperature, and dew point where available;
+- possible comparison with ERA5 Single Levels over marine/coastal regions;
+- physical context for the coastal gap-fill problem.
 
-### To be documented
+NDBC should not be described as direct validation of inland ERA5-Land pixels.
 
-- stations selected;
-- official URLs;
-- local paths;
-- period;
-- temporal resolution;
-- variables;
-- download commands;
-- verification results.
+### 8.4 Candidate stations checked
+
+The availability check was run for the period:
+
+```text
+2004–2023
+```
+
+Candidate stations checked:
+
+```text
+41043
+41053
+41056
+41115
+41121
+42085
+AROP4
+FRDP4
+JOXP4
+LPRP4
+MGIP4
+SJNP4
+VQSP4
+```
+
+### 8.5 Availability summary
+
+Availability summary produced by:
+
+```bash
+python scripts/download_ndbc_pr.py summary
+```
+
+Result:
+
+```text
+station,available_years,missing_years
+41043,17,3
+41053,14,6
+41056,11,9
+41115,13,7
+41121,3,17
+42085,15,5
+AROP4,13,7
+FRDP4,8,12
+JOXP4,0,20
+LPRP4,6,14
+MGIP4,19,1
+SJNP4,19,1
+VQSP4,8,12
+```
+
+Overall result:
+
+```text
+OK files:      146
+Missing files: 114
+```
+
+The station `JOXP4` had no available `stdmet` files for 2004–2023 in the checked NDBC historical path.
+
+### 8.6 Local paths
+
+```text
+scripts/download_ndbc_pr.py
+data_raw/noaa/ndbc/metadata/ndbc_pr_candidate_stations.txt
+data_raw/noaa/ndbc/metadata/ndbc_stdmet_availability_2004_2023.log
+data_raw/noaa/ndbc/metadata/ndbc_stdmet_availability_summary_2004_2023.csv
+data_raw/noaa/ndbc/metadata/ndbc_stdmet_download_manifest_2004_2023.csv
+data_raw/noaa/ndbc/raw/stdmet/
+data_raw/noaa/ndbc/raw/station_pages/
+logs/
+```
+
+### 8.7 Commands used
+
+The NDBC workflow was run with the project script:
+
+```bash
+python scripts/download_ndbc_pr.py init
+python scripts/download_ndbc_pr.py metadata
+python scripts/download_ndbc_pr.py availability
+python scripts/download_ndbc_pr.py summary
+python scripts/download_ndbc_pr.py download
+```
+
+The script was run inside a `tmux` session:
+
+```bash
+tmux new -s ndbc_pr
+```
+
+### 8.8 Download verification
+
+Downloaded files:
+
+```bash
+find data_raw/noaa/ndbc/raw/stdmet -type f -name "*.txt.gz" | wc -l
+```
+
+Result:
+
+```text
+146
+```
+
+Disk usage:
+
+```bash
+du -sh data_raw/noaa/ndbc/raw/stdmet
+```
+
+Result:
+
+```text
+77M     data_raw/noaa/ndbc/raw/stdmet
+```
+
+Compression integrity check:
+
+```bash
+find data_raw/noaa/ndbc/raw/stdmet -type f -name "*.txt.gz" -exec gzip -t {} \;
+```
+
+Result:
+
+```text
+(no output)
+```
+
+Interpretation: no gzip integrity errors were detected.
+
+Manifest generated with:
+
+```bash
+{
+    echo "filename,size_bytes"
+    find data_raw/noaa/ndbc/raw/stdmet -type f -name "*.txt.gz" -printf "%f,%s\n" | sort
+} > data_raw/noaa/ndbc/metadata/ndbc_stdmet_download_manifest_2004_2023.csv
+```
+
+Manifest verification:
+
+```bash
+wc -l data_raw/noaa/ndbc/metadata/ndbc_stdmet_download_manifest_2004_2023.csv
+```
+
+Result:
+
+```text
+147 data_raw/noaa/ndbc/metadata/ndbc_stdmet_download_manifest_2004_2023.csv
+```
+
+Interpretation: 146 downloaded files plus one header line.
+
+### 8.9 Header check
+
+A sample header from the downloaded files shows the standard meteorological columns:
+
+```text
+#YY  MM DD hh mm WDIR WSPD GST  WVHT   DPD   APD MWD   PRES  ATMP  WTMP  DEWP  VIS  TIDE
+#yr  mo dy hr mn degT m/s  m/s     m   sec   sec degT   hPa  degC  degC  degC  nmi    ft
+```
+
+Important processing notes:
+
+- files are whitespace-delimited;
+- each file includes two header lines;
+- timestamps are in year/month/day/hour/minute columns;
+- some annual files may include records from the previous UTC year near the year boundary;
+- missing-value codes such as `999`, `999.0`, `99.0`, and `99.00` must be handled carefully by variable;
+- visibility units may differ in the historical files (`mi` or `nmi`), so `VIS` should not be used before reviewing metadata and units;
+- processing must filter by actual timestamp, not only by filename year.
+
+### 8.10 Git status after raw download
+
+After downloading raw NDBC files:
+
+```bash
+git status --short
+```
+
+Result:
+
+```text
+(no output)
+```
+
+Interpretation: raw NDBC files and generated metadata under `data_raw/` are not being tracked by Git, which is correct.
+
+### 8.11 Next processing step
+
+Do not process scientifically yet.
+
+Next expected steps:
+
+1. Review NDBC `stdmet` format and missing-value conventions.
+2. Decide which variables are useful for the project.
+3. Build a small parser for one station/year.
+4. Verify timestamps, units, missing values, and plausible ranges.
+5. Only after verification, scale to all downloaded NDBC files.
+6. Produce compact intermediate tables under `data_interim/noaa/ndbc/`.
+7. Document processing before producing comparisons with ERA5 or ERA5 Single Levels.
 
 ---
 
