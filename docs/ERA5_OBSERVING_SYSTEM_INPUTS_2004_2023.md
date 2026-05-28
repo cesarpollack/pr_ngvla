@@ -316,3 +316,69 @@ Not yet completed:
 
 - ECMWF. IFS Documentation, Part I: Observations, ERA5-era documentation / CY41R2 observation processing reference.  
   https://www.ecmwf.int/sites/default/files/elibrary/2016/79695-ifs-documentation-cy41r2-part-i-observations_1.pdf
+---
+
+## 12. Official source table and evidence level
+
+This table records which official ECMWF source can support each type of claim in the PR-ngVLA observing-system review.
+
+| Official source | What it supports | Evidence level | How it applies to PR-ngVLA | What it does not prove by itself |
+|---|---|---|---|---|
+| ERA5 data documentation / ERA5 IFS configuration | ERA5 used 4D-Var data assimilation with 12-hour windows; background forecasts and observations inside each window contribute to the analysis | Methodological basis | Supports the statement that ERA5 grid values are not simple station averages or direct measurements | Does not identify which individual observations were active, passive, rejected, or blocklisted inside `AREA_PR` |
+| ECMWF Monitoring of the Observing System | Availability, quality, and usage summaries for observation classes received at ECMWF; access to 6-hourly data coverage charts | Available / monitored | Can help identify observation classes present or monitored over/near Puerto Rico during selected dates | Does not by itself prove that a specific observation was actively assimilated |
+| Observation Monitoring Dashboard | Grouped observation categories, availability, quality, and usage status as monitored by ECMWF automatic data checking | Monitored / usage summary | Useful for determining which observation families are represented in ECMWF monitoring products | May not provide record-level feedback for individual observations in the local bounding box |
+| ECMWF Global Data Monitoring Reports | Monthly monitoring summaries of observation availability and quality | Available / monitored, usually aggregate | Useful for documenting temporal changes in the observing system over 2004–2023 | May be too aggregated to confirm station/platform-specific usage in `AREA_PR` |
+| Observation Feedback Archive / ODB / MARS feedback | Observation values, quality flags, departures from first guess and analysis, bias estimates, and status information where accessible | Feedback-level evidence | Required for rigorous claims about active/passive/rejected/blocklisted observations | Access may be limited; availability for ERA5 and the exact fields must be verified before full extraction |
+| IFS Documentation, Part I: Observations | ODB report and datum status definitions; active, passive, rejected, blacklisted/blocklisted flags; QC and event words | Interpretation of feedback fields | Required to interpret ODB/feedback status flags correctly | Does not provide the actual regional observations; it only explains the meaning of fields/flags |
+
+---
+
+## 13. Evidence rules for this stage
+
+The project will use the following evidence rules:
+
+```text
+Rule 1:
+A monitoring plot or report can support that an observation class was available or monitored,
+but it is not sufficient to claim active assimilation of a specific observation.
+
+Rule 2:
+A claim that an observation was active, passive, rejected, or blocklisted requires
+observation-feedback, ODB, MARS, BUFR-feedback, or another official record with status fields.
+
+Rule 3:
+A small analysis departure or first-guess departure is not enough to prove active assimilation.
+Usage/status flags must also be checked.
+
+Rule 4:
+Local ERA5/ERA5-Land NetCDF files are gridded reanalysis products and do not contain the
+individual observations assimilated by ERA5.
+
+Rule 5:
+The official project domain for this stage remains:
+period = 2004–2023
+area   = [18.6, -68.0, 17.8, -65.0]
+```
+
+---
+
+## 14. Next controlled task
+
+The next controlled task is to determine whether the ECMWF monitoring tools or archived reports can provide observation-class evidence for the fixed domain and selected dates.
+
+No full-period extraction should be attempted until a small pilot confirms:
+
+- the access route,
+- the available observation classes,
+- whether spatial filtering to `AREA_PR` is possible,
+- whether usage/status fields are accessible,
+- whether the data volume is manageable.
+
+Recommended pilot dates remain:
+
+```text
+February 2020   # dry-season example
+September 2020  # wet-season example
+```
+
+September 2017 should be handled separately only if the project explicitly decides to examine Hurricane María-related observing-system behavior.
