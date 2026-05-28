@@ -6,11 +6,13 @@ Download ERA5-Land MONTHLY MEANS over Puerto Rico for 20 years (2004-2023).
 This is used for TIER 1: monthly climatology maps.
 
 Why monthly means in addition to hourly?
-  ECMWF pre-computes monthly aggregates, so you download ~100x less data
-  for the climatology maps. Monthly means are used to:
-    1. Build the 12-month suitability maps (the primary poster output)
-    2. Validate ERA5-Land against NOAA GHCN monthly station normals
-    3. Compute seasonal bias correction factors (dry vs wet season)
+  ECMWF pre-computes monthly aggregates, so these files are much smaller than
+  the full hourly archive and are useful for monthly climatology products.
+
+  In this project, ERA5-Land monthly means were downloaded to support monthly
+  climatology maps and possible future monthly-scale comparison or seasonal
+  diagnostics. Only analyses that have been completed and verified should be
+  described as project results.
 
 Dataset: reanalysis-era5-land-monthly-means
   (separate CDS dataset from hourly; much smaller files)

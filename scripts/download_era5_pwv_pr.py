@@ -15,10 +15,21 @@ TCWV (kg/m²) ≈ PWV (mm)
   1 kg/m² of water = 1 mm depth.
 
 Scientific justification:
-  PWV is the primary ngVLA site selection variable (ENV0316, ENV0326).
-  Threshold: 1-6 mm (Precision Operations, median 4 mm).
-  ERA5 PWV RMSE: 1.63 mm vs GNSS ground truth (better than MERRA-2 at 2.99 mm)
-  Reference: Muñoz-Sabater et al. (2021); Hersbach et al. (2020)
+  PWV is a primary ngVLA site-selection variable because atmospheric water
+  vapour strongly affects high-frequency radio observations.
+
+  ERA5-Land does not provide PWV/TCWV. Therefore, total column water vapour is
+  downloaded from ERA5 single levels using the CDS variable
+  total_column_water_vapour.
+
+  TCWV has units of kg m^-2, which is numerically equivalent to millimetres of
+  precipitable water depth.
+
+  Do not report a specific numerical PWV validation-error value in the project
+  documentation unless the exact validation reference and context have been
+  checked and cited.
+  General ERA5 and ERA5-Land references:
+  Hersbach et al. (2020); Muñoz-Sabater et al. (2021).
 
 Dataset: reanalysis-era5-single-levels
   (different from ERA5-Land — this is the full atmospheric model)

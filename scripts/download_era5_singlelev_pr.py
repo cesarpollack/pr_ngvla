@@ -7,13 +7,19 @@ Download ERA5 Single-Levels HOURLY data over Puerto Rico for 20 years
 
 PURPOSE
 -------
-ERA5-Land's land mask does not resolve small islands (Isla de Mona, Vieques,
-Culebra). ERA5 single-levels uses a coarser grid (0.25° vs 0.1°) but covers
-ALL grid cells including ocean/small islands, making it the only ERA5 product
-that provides atmospheric data for these islands.
+ERA5-Land provides the primary higher-resolution land-surface product for the
+main Puerto Rico analysis. However, ERA5-Land masking and land-sea
+representation can limit interpretation over coastal and small-island areas
+such as Isla de Mona, Vieques, and Culebra.
 
-This download is used exclusively for the small-island inset maps on the
-poster. The main Puerto Rico analysis uses ERA5-Land (higher resolution).
+ERA5 single-levels was downloaded as a coarser-resolution auxiliary product
+because it provides values over ocean and mixed land-sea grid cells, including
+coastal and small-island areas that may be unresolved or masked in ERA5-Land.
+
+The main Puerto Rico analysis uses ERA5-Land where appropriate. ERA5
+single-levels should be described as auxiliary support for PWV, coastal
+diagnostics, and small-island/coastal interpretation, not as a completed
+solution to the coastal-gap problem.
 
 VARIABLES
 ---------
@@ -227,7 +233,7 @@ def main() -> None:
     log.info("=" * 60)
     log.info("ERA5 Single-Levels Hourly Downloader — Puerto Rico ngVLA")
     log.info("=" * 60)
-    log.info("Purpose    : Small island coverage (Mona, Vieques, Culebra)")
+    log.info("Purpose    : Auxiliary coastal/small-island support")
     log.info("Dataset    : %s", DATASET)
     log.info("Resolution : 0.25° (~28 km) — coarser than ERA5-Land but")
     log.info("             covers all grid cells including small islands")
