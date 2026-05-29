@@ -615,29 +615,461 @@ Next expected steps:
 
 ## 9. NOAA CO-OPS
 
-### Status
+### 9.1 Status
 
-Candidate for next download.
+Downloaded and audited at the raw-data level.
 
-### Expected use
+This stage is considered complete for **raw acquisition**, but not for scientific processing.
 
-Coastal station observations, potentially including meteorological products depending on station.
+Current status:
 
-Recommended classification:
+```text
+CO-OPS raw acquisition: completed
+CO-OPS availability audit: completed
+CO-OPS raw structural audit: completed
+CO-OPS physical range audit: completed with flagged water-temperature issues
+CO-OPS clean/interim dataset: not started
+```
+
+### 9.2 Source
+
+NOAA Center for Operational Oceanographic Products and Services (CO-OPS), National Ocean Service (NOS).
+
+Official source locations used:
+
+```text
+https://tidesandcurrents.noaa.gov/web_services_info.html
+https://api.tidesandcurrents.noaa.gov/api/prod/
+https://api.tidesandcurrents.noaa.gov/mdapi/prod/
+https://tidesandcurrents.noaa.gov/products.html
+https://tidesandcurrents.noaa.gov/map/
+```
+
+APIs used:
+
+```text
+CO-OPS Metadata API
+CO-OPS Data API
+```
+
+Important API notes for this workflow:
+
+- hourly Data API requests were made by year because hourly products are limited to one year per request;
+- meteorological products were requested with `interval=h`;
+- units were requested as `metric`;
+- timestamps were requested as `gmt`;
+- water-level products were not downloaded in this stage because they require an explicit datum decision.
+
+### 9.3 Methodological use
+
+CO-OPS provides coastal and port station observations. For this project, the selected CO-OPS products should be treated as:
 
 ```text
 physical_context / partial_comparison
 ```
 
-### To be documented
+Expected uses:
 
-- stations selected;
-- official API URLs;
-- product names;
-- datum/time-zone choices if applicable;
-- local paths;
-- download commands;
-- verification results.
+- coastal meteorological context around Puerto Rico;
+- local coastal wind, air temperature, pressure, humidity, and water-temperature observations where available;
+- future comparison with coastal or marine ERA5 / ERA5 Single Levels fields, if methodologically justified later;
+- documentation of additional public observational datasets available for Puerto Rico and nearby coastal environments.
+
+CO-OPS should not be described as direct validation of inland ERA5-Land pixels or mountainous interior candidate sites.
+
+Better description:
+
+```text
+NOAA CO-OPS/NOS provides coastal point observations at specific station locations.
+These data are useful as coastal meteorological and marine-context observations,
+but they do not represent island-wide or inland Puerto Rico meteorology.
+```
+
+### 9.4 Products and physical scope
+
+Products selected for this raw acquisition stage:
+
+```text
+air_temperature
+water_temperature
+air_pressure
+wind
+humidity
+```
+
+Physical interpretation by product:
+
+```text
+air_temperature
+  Air temperature measured at the coastal station sensor.
+  Useful as coastal meteorological context; not an island-wide or inland land-temperature field.
+
+water_temperature
+  Water temperature measured at the local marine/coastal sensor.
+  Useful for marine/coastal thermal context; not air temperature and not directly inland meteorology.
+
+air_pressure
+  Barometric pressure measured at the coastal station sensor.
+  Useful for synoptic/local coastal pressure context; compare carefully across elevations.
+
+wind
+  Local coastal wind speed/direction/gust measured at the station exposure.
+  Useful for coastal wind regime; not automatically representative of mountainous or inland sites.
+
+humidity
+  Relative humidity measured at the coastal station sensor.
+  Useful for observed coastal humidity context; not a direct proxy for inland humidity gradients.
+```
+
+### 9.5 Station/product targets
+
+The final strict Puerto Rico target set contained:
+
+```text
+7 stations
+27 station-product combinations
+```
+
+Geographic interpretation:
+
+```text
+pr_strict = Puerto Rico main island + Vieques + Culebra + Mona Island
+```
+
+Stations in the target set:
+
+```text
+9752235  Culebra
+9752695  Esperanza, Vieques Island
+9753216  Fajardo
+9755371  San Juan, La Puntilla, San Juan Bay
+9759110  Magueyes Island
+9759394  Mayaguez
+9759938  Mona Island
+```
+
+Target products by count:
+
+```text
+air_pressure         7 station-product targets
+air_temperature      7 station-product targets
+water_temperature    7 station-product targets
+wind                 5 station-product targets
+humidity             1 station-product target
+```
+
+The target list was built from CO-OPS sensor metadata, using inactive sensors as well as active sensors because the project period is historical (`2004–2023`). A sensor that is inactive now may still have valid historical data.
+
+### 9.6 Local paths
+
+Script:
+
+```text
+scripts/download_coops_pr.py
+```
+
+Metadata and audit outputs:
+
+```text
+data_raw/noaa/coops/metadata/
+data_raw/noaa/coops/metadata/station_details/
+```
+
+Raw downloaded files:
+
+```text
+data_raw/noaa/coops/raw/
+```
+
+Logs:
+
+```text
+logs/noaa/coops/
+```
+
+Important metadata and audit files:
+
+```text
+data_raw/noaa/coops/metadata/coops_pr_candidate_stations.csv
+data_raw/noaa/coops/metadata/coops_pr_station_sensor_inventory.csv
+data_raw/noaa/coops/metadata/coops_pr_station_product_inventory.csv
+data_raw/noaa/coops/metadata/coops_pr_station_datum_inventory.csv
+data_raw/noaa/coops/metadata/coops_pr_variable_scope_notes.csv
+data_raw/noaa/coops/metadata/coops_pr_station_product_targets_from_sensors.csv
+data_raw/noaa/coops/metadata/coops_pr_data_api_availability_2004_2023.csv
+data_raw/noaa/coops/metadata/coops_pr_data_api_availability_summary_2004_2023.csv
+data_raw/noaa/coops/metadata/coops_download_manifest.csv
+data_raw/noaa/coops/metadata/coops_raw_file_audit.csv
+data_raw/noaa/coops/metadata/coops_raw_numeric_range_audit.csv
+```
+
+### 9.7 Commands used
+
+The CO-OPS workflow was run with the project script:
+
+```bash
+python scripts/download_coops_pr.py init
+python scripts/download_coops_pr.py metadata
+python scripts/download_coops_pr.py station-details
+python scripts/download_coops_pr.py targets --area pr_strict --include-inactive
+python scripts/download_coops_pr.py availability \
+  --area pr_strict \
+  --products air_temperature,water_temperature,air_pressure,wind,humidity \
+  --start 2004-01-01 \
+  --end 2023-12-31 \
+  --units metric \
+  --time-zone gmt \
+  --met-interval h \
+  --sleep 0.8 \
+  --include-inactive \
+  2>&1 | tee logs/noaa/coops/coops_availability_2004_2023_pr_strict_v6_$(date -u +%Y%m%dT%H%M%SZ).log
+python scripts/download_coops_pr.py download \
+  --area pr_strict \
+  --products air_temperature,water_temperature,air_pressure,wind,humidity \
+  --start 2004-01-01 \
+  --end 2023-12-31 \
+  --units metric \
+  --time-zone gmt \
+  --met-interval h \
+  --sleep 0.8 \
+  --include-inactive \
+  --overwrite \
+  --fresh-manifest \
+  2>&1 | tee logs/noaa/coops/coops_download_met_hourly_2004_2023_pr_strict_v6_$(date -u +%Y%m%dT%H%M%SZ).log
+python scripts/download_coops_pr.py audit-raw
+```
+
+The long availability and download steps were run inside a `tmux` session:
+
+```bash
+tmux new -s coops_pr
+```
+
+### 9.8 Metadata verification
+
+Station-detail outputs generated:
+
+```text
+coops_pr_station_sensor_inventory.csv
+coops_pr_station_product_inventory.csv
+coops_pr_station_datum_inventory.csv
+coops_pr_variable_scope_notes.csv
+```
+
+Observed line counts:
+
+```text
+61  data_raw/noaa/coops/metadata/coops_pr_station_sensor_inventory.csv
+300 data_raw/noaa/coops/metadata/coops_pr_station_product_inventory.csv
+652 data_raw/noaa/coops/metadata/coops_pr_station_datum_inventory.csv
+```
+
+Interpretation:
+
+```text
+The station metadata stage produced sensor, product, datum, and variable-scope inventories.
+These inventories were used to build a station/product target set before downloading data.
+```
+
+### 9.9 Availability verification
+
+Availability was checked for:
+
+```text
+Period: 2004–2023
+Products: air_temperature, water_temperature, air_pressure, wind, humidity
+Units: metric
+Time zone: GMT
+Meteorological interval: hourly
+```
+
+Final availability result:
+
+```text
+ok       394
+no_data  146
+total    540
+```
+
+Availability by product:
+
+```text
+air_pressure         ok 106 / no_data 34
+air_temperature      ok 107 / no_data 33
+humidity             ok  10 / no_data 10
+water_temperature    ok 101 / no_data 39
+wind                 ok  70 / no_data 30
+```
+
+Important correction:
+
+The CO-OPS Data API can return a CSV-like response with a valid header but with an API message such as:
+
+```text
+Error: No data was found. This product may not be offered at this station at the requested time.
+```
+
+These cases must be classified as:
+
+```text
+no_data
+```
+
+not as valid data.
+
+### 9.10 Download verification
+
+Final download manifest status:
+
+```text
+ok         394
+no_data    146
+```
+
+Raw file audit status:
+
+```text
+ok             394
+api_no_data    146
+```
+
+Chunks by product/status:
+
+```text
+air_pressure         no_data 34 / ok 106
+air_temperature      no_data 33 / ok 107
+humidity             no_data 10 / ok 10
+water_temperature    no_data 39 / ok 101
+wind                 no_data 30 / ok 70
+```
+
+Interpretation:
+
+```text
+The raw CO-OPS acquisition completed successfully.
+The workflow now distinguishes valid API responses with data from API no-data responses.
+The raw dataset is available for future work, but it is not yet a cleaned scientific dataset.
+```
+
+### 9.11 Raw audit and flagged values
+
+The structural raw audit was completed with:
+
+```bash
+python scripts/download_coops_pr.py audit-raw
+```
+
+Audit outputs:
+
+```text
+data_raw/noaa/coops/metadata/coops_raw_file_audit.csv
+data_raw/noaa/coops/metadata/coops_raw_numeric_range_audit.csv
+```
+
+The numeric range audit flagged two `water_temperature` chunks for physically suspicious values:
+
+```text
+station_id  product            year  issue
+9755371     water_temperature  2004  31 values below 0 °C; minimum -19.2 °C
+9759938     water_temperature  2009  21 values above 40 °C; maximum 43.4 °C
+```
+
+Interpretation:
+
+```text
+These flagged values do not invalidate the raw download.
+They indicate that water_temperature requires explicit QC in a later clean/interim stage.
+Raw files should remain unchanged.
+```
+
+### 9.12 Processing notes
+
+Important notes for future processing:
+
+- raw files must remain unchanged;
+- API `no_data` responses must not be treated as physical observations;
+- column names may contain leading or trailing spaces and must be normalized before processing;
+- timestamps are GMT/UTC for this workflow;
+- numeric columns must be converted safely;
+- NOAA flags, where available, should be reviewed before filtering;
+- broad physical ranges must be applied by variable;
+- flagged observations must be documented rather than silently removed;
+- water-level products were not downloaded and should not be added without a datum decision.
+
+Recommended later QC handling:
+
+1. Preserve raw files unchanged.
+2. Create an interim/clean version under `data_interim/noaa/coops/`.
+3. Normalize column names.
+4. Parse timestamps as UTC/GMT.
+5. Convert product columns to numeric values safely.
+6. Remove or flag API no-data responses.
+7. Apply physically realistic broad ranges by variable.
+8. Respect NOAA flags where available.
+9. Document all excluded or flagged observations.
+
+### 9.13 Git status after raw download
+
+Raw files and generated metadata are under `data_raw/` and should not be committed unless project policy explicitly allows selected lightweight metadata summaries.
+
+Before committing documentation/script changes, run:
+
+```bash
+git status --short
+git diff -- scripts/download_coops_pr.py docs/OBSERVATIONAL_DATA_DOWNLOADS.md
+```
+
+Recommended files to commit:
+
+```text
+scripts/download_coops_pr.py
+docs/OBSERVATIONAL_DATA_DOWNLOADS.md
+```
+
+Do not commit raw downloaded files:
+
+```text
+data_raw/noaa/coops/raw/
+```
+
+### 9.14 Report-ready summary
+
+A safe report statement is:
+
+```text
+NOAA CO-OPS/NOS coastal meteorological data for Puerto Rico were identified,
+downloaded, and audited at the raw-data level for selected hourly products over
+2004–2023. These observations provide coastal point measurements of air
+temperature, water temperature, barometric pressure, wind, and relative humidity
+where available. They are retained as an observational coastal dataset for future
+analysis, but they were not converted into a cleaned scientific dataset in this
+stage.
+```
+
+Shorter version:
+
+```text
+NOAA CO-OPS/NOS data were incorporated into the observational data inventory as
+coastal point observations. Although not used directly in the present site-selection
+analysis, the data were downloaded and audited at the raw level and may support
+future analyses of coastal meteorological and marine conditions around Puerto Rico.
+Further cleaning and quality control are required before formal scientific use.
+```
+
+### 9.15 Next processing step
+
+Do not process scientifically yet.
+
+Next expected steps, if CO-OPS is used later:
+
+1. Review raw CSV format by product.
+2. Build a small parser for one station/product/year.
+3. Verify timestamps, column names, units, flags, and plausible ranges.
+4. Define product-specific QC rules.
+5. Produce compact intermediate tables under `data_interim/noaa/coops/`.
+6. Document processing before producing comparisons with ERA5, ERA5-Land, or ERA5 Single Levels.
+
+Do not use the CO-OPS raw files directly in scientific figures or statistical summaries until the clean/interim stage exists.
 
 ---
 
