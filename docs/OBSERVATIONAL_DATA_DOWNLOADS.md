@@ -1075,29 +1075,253 @@ Do not use the CO-OPS raw files directly in scientific figures or statistical su
 
 ## 10. USGS NWIS
 
-### Status
+### 10.1 Status
 
-Candidate source.
+Downloaded and audited at the raw-data-acquisition level.
 
-### Expected use
+This stage is considered complete for **technical raw acquisition** of USGS NWIS instantaneous/unit-value precipitation data for Puerto Rico over the project period, but not for scientific processing.
 
-Hydrometeorological context, especially precipitation if suitable historical data and temporal resolution are available for Puerto Rico stations.
+Current status:
+
+```text
+USGS NWIS precipitation UV raw acquisition: completed
+USGS NWIS canonical manifest: completed
+USGS NWIS error recovery manifest: completed
+USGS NWIS technical acquisition errors remaining: 0
+USGS NWIS clean/interim dataset: not started
+```
+
+### 10.2 Source
+
+USGS National Water Information System (NWIS), instantaneous/unit-value service.
+
+Product requested:
+
+```text
+Service: USGS NWIS instantaneous/unit values / IV
+Parameter code: 00045
+Variable: precipitation
+Period: 2004-01-01 to 2023-12-31
+Area: Puerto Rico
+Raw request formats used: RDB first, JSON fallback when RDB failed
+```
+
+Important source note:
+
+```text
+This workflow preserves raw USGS responses. It does not convert units, clean quality flags,
+aggregate to hourly values, interpolate, compare with ERA5, or generate science products.
+```
+
+### 10.3 Methodological use
+
+USGS NWIS precipitation UV provides point precipitation observations at USGS station locations.
 
 Recommended classification:
 
 ```text
-physical_context / partial_comparison
+direct_validation for point precipitation only / partial_comparison / physical_context
 ```
 
-### Caution
+Expected uses:
 
-Before large downloads, verify:
+- observed point precipitation context for Puerto Rico;
+- possible point-based comparison with gridded precipitation products after proper temporal/unit/QC review;
+- hydrometeorological context for evaluating precipitation patterns relevant to site-selection constraints;
+- independent observational source to complement NOAA and coastal datasets.
 
-- parameter codes;
-- station availability in Puerto Rico;
-- period coverage;
-- temporal resolution;
-- whether historical precipitation access is limited.
+USGS NWIS precipitation UV should not be described as a continuous island-wide precipitation field. It is a station-based raw observational dataset. Any later comparison with ERA5, ERA5-Land, ERA5 Single Levels, GPM IMERG, or other gridded products must account for station location, temporal resolution, accumulation interval, missing data, and metadata/quality flags.
+
+### 10.4 Physical scope of the variable
+
+The requested variable is USGS parameter code `00045`, precipitation.
+
+Physical interpretation for this workflow:
+
+```text
+00045 precipitation
+Precipitation measured at or associated with the reporting USGS NWIS station/sensor.
+The raw IV/UV records may contain high-frequency observations, irregular timestamps,
+accumulation behavior, qualifiers, and station-specific metadata. These raw files must
+not be interpreted as cleaned hourly precipitation until the units, timestamps, flags,
+and accumulation conventions are reviewed.
+```
+
+Scope limitation:
+
+```text
+The downloaded raw data characterize precipitation at specific USGS station locations.
+They do not by themselves provide a spatially continuous precipitation field over Puerto Rico.
+```
+
+### 10.5 Local paths
+
+Script:
+
+```text
+scripts/download_usgs_nwis_pr.py
+```
+
+Raw downloaded files:
+
+```text
+data_raw/usgs/nwis/raw/precipitation_uv/
+```
+
+Metadata and manifests:
+
+```text
+data_raw/usgs/nwis/metadata/usgs_nwis_pr_precipitation_uv_download_manifest_20040101_20231231.csv
+data_raw/usgs/nwis/metadata/usgs_nwis_pr_precipitation_uv_retry_errors_manifest_20040101_20231231.csv
+```
+
+Log from the recovery run:
+
+```text
+logs/usgs/nwis/usgs_nwis_precip_uv_retry_errors_20260531T084246Z.log
+```
+
+### 10.6 Commands used
+
+The USGS NWIS workflow used the project script:
+
+```bash
+scripts/download_usgs_nwis_pr.py
+```
+
+The recovery stage was run with `systemd-run --user`, not `tmux`, because the current server environment should not rely on long-running `tmux` jobs.
+
+The recovery job used the absolute Python interpreter from the project conda environment:
+
+```text
+/export/ngvla/cpollack/miniconda3/envs/pr_ngvla/bin/python
+```
+
+Command used for the final retry/recovery stage:
+
+```bash
+cd /export/ngvla/cpollack/pr_ngvla && mkdir -p logs/usgs/nwis && systemd-run --user --unit=pr-ngvla-usgs-nwis-retry-errors --collect --same-dir bash -lc 'cd /export/ngvla/cpollack/pr_ngvla || exit 1; LOG="/export/ngvla/cpollack/pr_ngvla/logs/usgs/nwis/usgs_nwis_precip_uv_retry_errors_$(date -u +%Y%m%dT%H%M%SZ).log"; { echo "[USGS_NWIS_RETRY_ERRORS_START] $(date -u +%Y-%m-%dT%H:%M:%SZ)"; export PYTHONUNBUFFERED=1; /export/ngvla/cpollack/miniconda3/envs/pr_ngvla/bin/python scripts/download_usgs_nwis_pr.py retry-errors --start 2004-01-01 --end 2023-12-31 --json-fallback --sleep 1.0 --retries 6 --timeout 180 --progress-every 10; rc=$?; echo "[USGS_NWIS_RETRY_ERRORS_END] $(date -u +%Y-%m-%dT%H:%M:%SZ) EXIT_CODE=$rc"; exit "$rc"; } 2>&1 | tee -a "$LOG"; exit ${PIPESTATUS[0]}'
+```
+
+### 10.7 Retry-errors workflow
+
+The script was updated to add a `retry-errors` mode.
+
+Purpose:
+
+```text
+Read the canonical precipitation UV download manifest.
+Filter only rows with status=error.
+Retry only those failed chunks.
+Attempt RDB first.
+If RDB fails, retry the same chunk as raw JSON.
+Write a separate recovery manifest.
+Never overwrite the canonical manifest.
+Write the recovery manifest incrementally so the process is resumable.
+```
+
+Git commit for the script update:
+
+```text
+971babb Add USGS NWIS precipitation UV retry-errors workflow
+```
+
+### 10.8 Download and recovery verification
+
+Final canonical manifest audit:
+
+```text
+canonical_rows = 5420
+canonical_status_counts = {'skipped_existing': 2912, 'error': 402, 'ok': 2106}
+canonical_error_rows = 402
+```
+
+Final recovery manifest audit:
+
+```text
+recovery_rows = 402
+recovery_status_counts = {'json_fallback_ok': 402}
+unrecovered_canonical_errors = 0
+missing_or_empty_recovery_files = 0
+```
+
+Recovery log ending:
+
+```text
+Finished precipitation UV retry-errors recovery_manifest=/export/ngvla/cpollack/pr_ngvla/data_raw/usgs/nwis/metadata/usgs_nwis_pr_precipitation_uv_retry_errors_manifest_20040101_20231231.csv canonical_error_rows=402 attempted=402 already_recovered=0 ok=402 errors=0
+[USGS_NWIS_RETRY_ERRORS_END] 2026-05-31T10:57:55Z EXIT_CODE=0
+```
+
+Interpretation:
+
+```text
+All 402 technical acquisition errors from the canonical manifest were recovered through JSON fallback.
+No canonical error rows remain unrecovered.
+No recovery raw files were missing or empty.
+The raw acquisition stage is technically complete.
+```
+
+### 10.9 Processing notes
+
+Important notes for future processing:
+
+- raw files must remain unchanged;
+- the canonical manifest was preserved and not overwritten;
+- the retry/recovery manifest is separate from the canonical manifest;
+- `json_fallback_ok` means the RDB request failed but the raw JSON request succeeded;
+- `json_fallback_ok` is a successful raw-acquisition status, not a scientific QC status;
+- raw JSON and raw RDB files may require separate parsers or a harmonized ingestion layer;
+- timestamps, units, qualifiers, accumulation behavior, missing values, and station metadata must be reviewed before scientific use;
+- do not treat the raw files as a cleaned hourly precipitation dataset;
+- do not interpolate or compare with ERA5/ERA5-Land/GPM until the clean/interim stage exists.
+
+### 10.10 Git status after raw acquisition
+
+After the recovery run, only the script change was committed.
+
+Committed script update:
+
+```text
+971babb Add USGS NWIS precipitation UV retry-errors workflow
+```
+
+The branch was pushed to GitHub:
+
+```text
+feat/ghcnh-hourly-download -> feat/ghcnh-hourly-download
+```
+
+Raw data, manifests, and logs under `data_raw/` and `logs/` are not intended to be committed unless project policy explicitly allows selected lightweight metadata summaries.
+
+### 10.11 Report-ready summary
+
+Safe report statement:
+
+```text
+USGS NWIS instantaneous/unit-value precipitation data for Puerto Rico were acquired at the raw level for the 2004–2023 project period. Initial RDB download errors were recovered using a controlled retry workflow with JSON fallback. The acquisition is technically complete and auditable through canonical and recovery manifests, but the data have not yet been converted, cleaned, quality-controlled, aggregated, interpolated, or used in scientific comparisons.
+```
+
+Shorter version:
+
+```text
+USGS NWIS precipitation observations were incorporated into the observational data inventory as raw point-based hydrometeorological data for Puerto Rico. The raw acquisition was completed and verified, but further unit review, timestamp handling, quality control, and interim-table generation are required before scientific use.
+```
+
+### 10.12 Next processing step
+
+Do not process scientifically yet.
+
+Next expected steps, if USGS NWIS precipitation is used later:
+
+1. Review USGS NWIS IV/UV raw RDB and JSON structures.
+2. Identify the exact precipitation value fields, units, qualifiers, and timestamp conventions.
+3. Determine how USGS reports accumulation intervals for parameter `00045` in these records.
+4. Build a small parser for one station/chunk.
+5. Compare RDB and JSON structures for equivalent chunks.
+6. Define clean/interim schema under `data_interim/usgs/nwis/`.
+7. Apply conservative timestamp, unit, missing-value, and QC handling.
+8. Produce compact station-time precipitation tables only after verification.
+9. Document the processing workflow before using the data in figures, statistics, interpolation, or gridded-product comparisons.
 
 ---
 
