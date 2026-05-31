@@ -1263,6 +1263,268 @@ def cmd_download_precip_uv(args: argparse.Namespace, paths: Paths) -> None:
     print(f"Manifest:           {paths.precip_uv_download_manifest_csv}")
 
 
+
+def precip_uv_retry_errors_manifest_csv(paths: Paths) -> Path:
+    return paths.metadata_dir / (
+        f"usgs_nwis_pr_precipitation_uv_retry_errors_manifest_"
+        f"{paths.start_label}_{paths.end_label}.csv"
+    )
+
+
+def _manifest_chunk_key(row: dict[str, str]) -> tuple[str, str, str]:
+    return (
+        row.get("site_no", ""),
+        row.get("chunk_start", ""),
+        row.get("chunk_end", ""),
+    )
+
+
+def _successful_precip_uv_status(status: str) -> bool:
+    return status in {
+        "ok",
+        "rows_no_datetime_column",
+        "no_rows",
+        "skipped_existing",
+        "json_fallback_ok",
+        "json_fallback_no_rows",
+    }
+
+
+def _resolve_repo_relative_path(paths: Paths, path_text: str) -> Path:
+    path = Path(path_text)
+    if path.is_absolute():
+        return path
+    return (paths.repo_root / path).resolve()
+
+
+def cmd_retry_errors(args: argparse.Namespace, paths: Paths) -> None:
+    """
+    Retry only rows with status=error from an existing precipitation UV download manifest.
+
+    This mode is intentionally raw-data acquisition only. It does not process,
+    clean, aggregate, interpolate, map, or compare data. It writes a separate
+    recovery manifest and never overwrites the canonical download manifest.
+    """
+    ensure_directories(paths)
+    paths.precip_uv_raw_dir.mkdir(parents=True, exist_ok=True)
+
+    canonical_manifest = (
+        _resolve_repo_relative_path(paths, args.canonical_manifest)
+        if args.canonical_manifest
+        else paths.precip_uv_download_manifest_csv
+    )
+    recovery_manifest = (
+        _resolve_repo_relative_path(paths, args.recovery_manifest)
+        if args.recovery_manifest
+        else precip_uv_retry_errors_manifest_csv(paths)
+    )
+
+    if not canonical_manifest.exists():
+        raise FileNotFoundError(f"Canonical manifest not found: {canonical_manifest}")
+
+    canonical_rows = read_csv(canonical_manifest)
+    error_rows = [row for row in canonical_rows if row.get("status", "") == "error"]
+
+    manifest_rows: list[dict[str, str]] = []
+    completed_keys: set[tuple[str, str, str]] = set()
+    if recovery_manifest.exists():
+        manifest_rows = read_csv(recovery_manifest)
+        completed_keys = {
+            _manifest_chunk_key(row)
+            for row in manifest_rows
+            if _successful_precip_uv_status(row.get("status", ""))
+        }
+
+    pending_rows = [
+        row for row in error_rows
+        if _manifest_chunk_key(row) not in completed_keys
+    ]
+
+    total_chunks = 0
+    ok_chunks = 0
+    skipped_chunks = len(error_rows) - len(pending_rows)
+    error_chunks = 0
+
+    log(
+        paths,
+        "Starting precipitation UV retry-errors: "
+        f"canonical_manifest={canonical_manifest} "
+        f"recovery_manifest={recovery_manifest} "
+        f"canonical_error_rows={len(error_rows)} "
+        f"already_recovered={skipped_chunks} "
+        f"pending={len(pending_rows)} "
+        f"json_fallback={args.json_fallback}",
+    )
+
+    if not error_rows:
+        print("\nUSGS NWIS precipitation UV retry-errors summary")
+        print("------------------------------------------------")
+        print(f"Canonical manifest: {canonical_manifest}")
+        print("Canonical error rows: 0")
+        print(f"Recovery manifest:  {recovery_manifest}")
+        return
+
+    for attempt_index, source_row in enumerate(pending_rows, start=1):
+        total_chunks += 1
+        site_no = source_row.get("site_no", "")
+        chunk_start_text = source_row.get("chunk_start", "")
+        chunk_end_text = source_row.get("chunk_end", "")
+
+        row: dict[str, str] = {
+            field: source_row.get(field, "")
+            for field in precip_uv_manifest_fieldnames()
+        }
+        row.update({
+            "status": "",
+            "n_rows": "0",
+            "datetime_column": "",
+            "first_datetime": "",
+            "last_datetime": "",
+            "n_unique_datetimes": "0",
+            "min_step_minutes": "",
+            "median_step_minutes": "",
+            "max_step_minutes": "",
+            "url": "",
+            "error": "",
+        })
+
+        try:
+            chunk_start = dt.date.fromisoformat(chunk_start_text)
+            chunk_end = dt.date.fromisoformat(chunk_end_text)
+        except ValueError as exc:
+            row["status"] = "error"
+            row["error"] = f"Invalid chunk_start/chunk_end in canonical manifest: {exc}"
+            error_chunks += 1
+            manifest_rows.append(row)
+            write_csv(recovery_manifest, manifest_rows, precip_uv_manifest_fieldnames())
+            continue
+
+        out_path = raw_precip_uv_chunk_path(paths, site_no, chunk_start, chunk_end)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        row["raw_path"] = str(out_path.relative_to(paths.repo_root))
+
+        params = {
+            "format": "rdb",
+            "sites": site_no,
+            "parameterCd": "00045",
+            "startDT": chunk_start.isoformat(),
+            "endDT": chunk_end.isoformat(),
+            "siteStatus": "all",
+        }
+
+        try:
+            text, full_url = fetch_text(
+                IV_SERVICE_URL,
+                params,
+                timeout=args.timeout,
+                sleep=args.sleep,
+                retries=args.retries,
+            )
+            out_path.write_text(text, encoding="utf-8")
+            row["url"] = full_url
+
+            header, parsed_rows = parse_rdb(text)
+            row["n_rows"] = str(len(parsed_rows))
+            row["datetime_column"] = find_datetime_column(header)
+
+            if parsed_rows and row["datetime_column"]:
+                row.update(infer_step_minutes(parsed_rows, row["datetime_column"]))
+                row["status"] = "ok"
+            elif parsed_rows:
+                row["status"] = "rows_no_datetime_column"
+            else:
+                row["status"] = "no_rows"
+
+            ok_chunks += 1
+        except Exception as rdb_exc:
+            if args.json_fallback:
+                json_path = raw_precip_uv_json_chunk_path(paths, site_no, chunk_start, chunk_end)
+                json_path.parent.mkdir(parents=True, exist_ok=True)
+
+                json_params = dict(params)
+                json_params["format"] = "json"
+
+                try:
+                    json_text, json_full_url = fetch_text(
+                        IV_SERVICE_URL,
+                        json_params,
+                        timeout=args.timeout,
+                        sleep=args.sleep,
+                        retries=args.retries,
+                    )
+                    json_path.write_text(json_text, encoding="utf-8")
+
+                    row["raw_path"] = str(json_path.relative_to(paths.repo_root))
+                    row["url"] = json_full_url
+                    row.update(summarize_iv_json(json_text))
+
+                    if row["n_rows"] != "0":
+                        row["status"] = "json_fallback_ok"
+                    else:
+                        row["status"] = "json_fallback_no_rows"
+
+                    row["error"] = (
+                        "RDB failed; JSON fallback succeeded. "
+                        f"rdb_error={str(rdb_exc).replace(chr(10), ' | ')[:700]}"
+                    )
+                    ok_chunks += 1
+                    log(
+                        paths,
+                        f"Retry JSON FALLBACK site={site_no} chunk={chunk_start}..{chunk_end}: "
+                        f"status={row['status']} rows={row['n_rows']}",
+                    )
+                except Exception as json_exc:
+                    row["status"] = "error"
+                    row["error"] = (
+                        "RDB failed and JSON fallback failed. "
+                        f"rdb_error={str(rdb_exc).replace(chr(10), ' | ')[:450]} | "
+                        f"json_error={str(json_exc).replace(chr(10), ' | ')[:450]}"
+                    )[:1000]
+                    error_chunks += 1
+                    log(
+                        paths,
+                        f"Retry ERROR site={site_no} chunk={chunk_start}..{chunk_end}: {row['error']}",
+                    )
+            else:
+                row["status"] = "error"
+                row["error"] = str(rdb_exc).replace("\n", " | ")[:1000]
+                error_chunks += 1
+                log(
+                    paths,
+                    f"Retry ERROR site={site_no} chunk={chunk_start}..{chunk_end}: {row['error']}",
+                )
+
+        manifest_rows.append(row)
+        write_csv(recovery_manifest, manifest_rows, precip_uv_manifest_fieldnames())
+
+        if attempt_index % args.progress_every == 0:
+            log(
+                paths,
+                f"Retry progress attempted={total_chunks} ok={ok_chunks} "
+                f"errors={error_chunks} already_recovered={skipped_chunks} latest_site={site_no}",
+            )
+
+        time.sleep(args.sleep)
+
+    write_csv(recovery_manifest, manifest_rows, precip_uv_manifest_fieldnames())
+    log(
+        paths,
+        f"Finished precipitation UV retry-errors recovery_manifest={recovery_manifest} "
+        f"canonical_error_rows={len(error_rows)} attempted={total_chunks} "
+        f"already_recovered={skipped_chunks} ok={ok_chunks} errors={error_chunks}",
+    )
+
+    print("\nUSGS NWIS precipitation UV retry-errors summary")
+    print("------------------------------------------------")
+    print(f"Canonical manifest:     {canonical_manifest}")
+    print(f"Canonical error rows:   {len(error_rows)}")
+    print(f"Already recovered:      {skipped_chunks}")
+    print(f"Retry chunks attempted: {total_chunks}")
+    print(f"OK chunks:              {ok_chunks}")
+    print(f"Error chunks:           {error_chunks}")
+    print(f"Raw directory:          {paths.precip_uv_raw_dir}")
+    print(f"Recovery manifest:      {recovery_manifest}")
+
 def precip_uv_manifest_fieldnames() -> list[str]:
     return [
         "site_no",
@@ -1328,7 +1590,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "mode",
-        choices=["init", "sites", "summary", "probe-precip-uv", "download-precip-uv"],
+        choices=["init", "sites", "summary", "probe-precip-uv", "download-precip-uv", "retry-errors"],
         help="Workflow stage to run.",
     )
     parser.add_argument(
@@ -1369,6 +1631,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--include-unknown", action="store_true", help="Include probe rows with unknown cadence in download-precip-uv mode.")
     parser.add_argument("--resume", action="store_true", help="Skip existing non-empty raw chunk files in download-precip-uv mode and include them in the manifest.")
     parser.add_argument("--json-fallback", action="store_true", help="If an RDB precipitation UV chunk fails, retry the same chunk as raw JSON and record json_fallback_* status in the manifest.")
+    parser.add_argument("--canonical-manifest", default="", help="Existing precipitation UV manifest to read status=error rows from in retry-errors mode.")
+    parser.add_argument("--recovery-manifest", default="", help="Separate recovery manifest to write in retry-errors mode. Defaults to metadata/usgs_nwis_pr_precipitation_uv_retry_errors_manifest_<START>_<END>.csv.")
     parser.add_argument("--retries", type=int, default=3, help="HTTP retries for USGS service requests.")
     parser.add_argument("--progress-every", type=int, default=25, help="Log progress after this many chunks during download-precip-uv.")
     return parser.parse_args(argv)
@@ -1424,6 +1688,8 @@ def main(argv: list[str] | None = None) -> int:
             cmd_probe_precip_uv(args, paths)
         elif args.mode == "download-precip-uv":
             cmd_download_precip_uv(args, paths)
+        elif args.mode == "retry-errors":
+            cmd_retry_errors(args, paths)
         else:
             raise RuntimeError(f"Unhandled mode: {args.mode}")
     except KeyboardInterrupt:
