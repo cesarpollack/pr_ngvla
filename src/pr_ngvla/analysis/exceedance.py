@@ -43,7 +43,7 @@ import xarray as xr
 
 from pr_ngvla.config import (
     ERA5_HOURLY_DIR,
-    ERA5_PWV_DIR,
+    ERA5_PWV_BUFFERED_PR_DIR,
     OUTPUTS,
     KELVIN_TO_CELSIUS,
     STUDY_YEARS,
@@ -274,7 +274,7 @@ def _load_month(var: str, year: int, month: int) -> xr.Dataset:
     elif var == "pwv":
         # PWV files are annual — open full year, select month
         fname = f"era5_hourly_tcwv_PR_{year}.nc"
-        fpath = ERA5_PWV_DIR / fname
+        fpath = ERA5_PWV_BUFFERED_PR_DIR / fname
 
     else:
         raise ValueError(f"Unknown variable: {var}")

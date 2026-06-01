@@ -25,7 +25,7 @@ import xarray as xr
 from pr_ngvla.config import (
     ERA5_HOURLY_DIR,
     ERA5_MONTHLY_DIR,
-    ERA5_PWV_DIR,
+    ERA5_PWV_BUFFERED_PR_DIR,
     ERA5_T2M, ERA5_D2M, ERA5_U10, ERA5_V10, ERA5_TP, ERA5_SP, ERA5_TCWV,
     KELVIN_TO_CELSIUS, PA_TO_HPA, M_TO_MM,
 )
@@ -134,10 +134,13 @@ def open_era5land_monthly(
 
 def open_era5_pwv(
     year: int,
-    data_dir: Path = ERA5_PWV_DIR,
+    data_dir: Path = ERA5_PWV_BUFFERED_PR_DIR,
 ) -> xr.DataArray:
     """
     Open ERA5 single-levels Total Column Water Vapour for one year.
+
+    By default, this uses the corrected buffered Puerto Rico TCWV acquisition.
+    The original narrow acquisition can still be opened by passing ERA5_PWV_DIR explicitly.
 
     TCWV (kg/m²) == PWV (mm) — conversion is 1:1.
 

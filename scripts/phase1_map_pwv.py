@@ -9,7 +9,7 @@ import matplotlib; matplotlib.use("Agg")
 import numpy as np
 import matplotlib.pyplot as plt
 
-from pr_ngvla.config import ERA5_PWV_DIR, COAST_SHP, MUNI_SHP, OUT_MAPS, NOAA_ISD_DIR
+from pr_ngvla.config import ERA5_PWV_BUFFERED_PR_DIR, COAST_SHP, MUNI_SHP, OUT_MAPS, NOAA_ISD_DIR
 from pr_ngvla.data.loaders  import load_era5_pwv, load_noaa_isd_stations
 from pr_ngvla.data.spatial  import load_vector_data
 from pr_ngvla.data.temporal import monthly_climatology
@@ -23,7 +23,7 @@ OUT_MAPS.mkdir(parents=True, exist_ok=True)
 
 
 def load_data():
-    tcwv = load_era5_pwv(ERA5_PWV_DIR)
+    tcwv = load_era5_pwv(ERA5_PWV_BUFFERED_PR_DIR)
     time_dim = "valid_time" if "valid_time" in tcwv.dims else "time"
     clim = monthly_climatology(tcwv, time_dim=time_dim)
     print(f"[INFO] PWV range: {float(clim.min()):.1f} – {float(clim.max()):.1f} mm")

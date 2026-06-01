@@ -170,12 +170,16 @@ v10_clim = monthly_climatology(ds_w["v10"])
 ws_clim  = np.sqrt(u10_clim**2 + v10_clim**2)
 tp_clim  = precip_to_mm_month(monthly_climatology(ds_w["tp"]))
 
-# PWV — annual from single-levels
-pwv_nc_list = sorted((OUTPUTS.parent / "data_raw" / "era5" / "pwv").glob("*.nc"))
+# PWV — annual from ERA5 single-levels corrected buffered TCWV acquisition.
+# The buffered domain is interpolation support only; final analysis remains restricted to Puerto Rico.
+from pr_ngvla.config import ERA5_PWV_BUFFERED_PR_DIR
+
+pwv_nc_list = sorted(ERA5_PWV_BUFFERED_PR_DIR.glob("*.nc"))
 if not pwv_nc_list:
-    # try config path
-    from pr_ngvla.config import ERA5_PWV_DIR
-    pwv_nc_list = sorted(ERA5_PWV_DIR.glob("*.nc"))
+    raise FileNotFoundError(
+        f"No corrected buffered PWV files found in {ERA5_PWV_BUFFERED_PR_DIR}. "
+        "Run scripts/download_era5_pwv_pr.py with --buffered-pr first."
+    )
 pwv_ds = xr.open_mfdataset(pwv_nc_list, combine="by_coords")
 pwv_var = [v for v in pwv_ds.data_vars if "tcwv" in v.lower() or "pwv" in v.lower()][0]
 pwv_clim = monthly_climatology(pwv_ds[pwv_var])

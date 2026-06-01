@@ -36,7 +36,11 @@ DATA_RAW = PROJECT_ROOT / "data_raw"
 ERA5_DIR = DATA_RAW / "era5"
 ERA5_MONTHLY_DIR = ERA5_DIR / "monthly"
 ERA5_HOURLY_DIR = ERA5_DIR / "hourly"
+# ERA5 single-levels TCWV/PWV.
+# ERA5_PWV_DIR preserves the original narrow request for diagnostic traceability.
+# ERA5_PWV_BUFFERED_PR_DIR is the corrected interpolation-support acquisition.
 ERA5_PWV_DIR = ERA5_DIR / "pwv"
+ERA5_PWV_BUFFERED_PR_DIR = ERA5_DIR / "pwv_buffered_pr"
 ERA5_SINGLELEV_DIR = ERA5_DIR / "singlelev"
 
 # NOAA raw data
