@@ -54,9 +54,12 @@ from __future__ import annotations
 import argparse
 import logging
 import time
+from datetime import datetime
 from pathlib import Path
 
 import cdsapi
+import numpy as np
+import xarray as xr
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -65,7 +68,13 @@ import cdsapi
 YEARS = list(range(2004, 2024))
 
 # Puerto Rico bounding box [North, West, South, East]
+# Original project analysis bbox. Kept as the default for backward compatibility.
 AREA_PR = [18.6, -68.0, 17.8, -65.0]
+
+# Buffered bbox used only when TCWV/PWV is being downloaded for interpolation
+# onto the ERA5-Land target grid. This does not expand the final analysis
+# domain; it only provides native ERA5 0.25-degree support around the target grid.
+AREA_PR_BUFFERED_FOR_INTERPOLATION = [18.75, -68.25, 17.50, -64.75]
 
 # ERA5 single-levels dataset (NOT era5-land)
 DATASET = "reanalysis-era5-single-levels"
@@ -89,7 +98,101 @@ log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 
-def build_request(year: int) -> dict:
+def expected_era5_native_coords(area: list[float]) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Return expected ERA5 single-level native latitude/longitude coordinates
+    for a CDS area request [North, West, South, East] on the 0.25-degree grid.
+    """
+    north, west, south, east = area
+
+    lats = np.arange(90.0, -90.0001, -0.25)
+    lons = np.arange(-180.0, 180.0001, 0.25)
+
+    expected_lats = lats[(lats <= north + 1e-9) & (lats >= south - 1e-9)]
+    expected_lons = lons[(lons >= west - 1e-9) & (lons <= east + 1e-9)]
+
+    return np.round(expected_lats, 6), np.round(expected_lons, 6)
+
+
+def normalize_longitudes(lons: np.ndarray) -> np.ndarray:
+    """Normalize longitudes to the -180..180 convention for validation."""
+    values = np.asarray(lons, dtype=float)
+    values = np.where(values > 180.0, values - 360.0, values)
+    return np.round(values, 6)
+
+
+def validate_tcwv_file(filepath: Path, area: list[float]) -> tuple[bool, str]:
+    """
+    Validate that an existing/downloaded TCWV NetCDF file is usable for the
+    requested area before skipping or accepting it.
+
+    This prevents partial/corrupt files from being silently reused.
+    """
+    if not filepath.exists():
+        return False, "file does not exist"
+
+    try:
+        with xr.open_dataset(filepath) as ds:
+            # CDS requests use the long variable name "total_column_water_vapour",
+            # but the NetCDF variable commonly appears as the GRIB short name "tcwv".
+            tcwv_var = "tcwv" if "tcwv" in ds.data_vars else VARIABLE if VARIABLE in ds.data_vars else None
+            if tcwv_var is None:
+                return (
+                    False,
+                    f"missing TCWV variable; expected one of ['tcwv', {VARIABLE!r}]; "
+                    f"available={list(ds.data_vars)}",
+                )
+
+            lat_name = "latitude" if "latitude" in ds.coords else "lat" if "lat" in ds.coords else None
+            lon_name = "longitude" if "longitude" in ds.coords else "lon" if "lon" in ds.coords else None
+
+            if lat_name is None or lon_name is None:
+                return False, "missing latitude/longitude coordinates"
+
+            time_dim = "valid_time" if "valid_time" in ds.dims else "time" if "time" in ds.dims else None
+            if time_dim is None:
+                return False, "missing valid_time/time dimension"
+
+            if ds.sizes.get(time_dim, 0) <= 0:
+                return False, f"empty time dimension: {time_dim}"
+
+            expected_lats, expected_lons = expected_era5_native_coords(area)
+            got_lats = np.round(np.asarray(ds[lat_name].values, dtype=float), 6)
+            got_lons = normalize_longitudes(ds[lon_name].values)
+
+            if got_lats.shape != expected_lats.shape or not np.allclose(got_lats, expected_lats):
+                return (
+                    False,
+                    f"latitude mismatch: got={got_lats.tolist()} expected={expected_lats.tolist()}",
+                )
+
+            if got_lons.shape != expected_lons.shape or not np.allclose(got_lons, expected_lons):
+                return (
+                    False,
+                    f"longitude mismatch: got={got_lons.tolist()} expected={expected_lons.tolist()}",
+                )
+
+            return True, (
+                f"valid TCWV file: time={ds.sizes[time_dim]}, "
+                f"lat={ds.sizes[lat_name]}, lon={ds.sizes[lon_name]}"
+            )
+
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+
+
+def quarantine_invalid_file(filepath: Path, reason: str) -> Path:
+    """Move an invalid existing/downloaded file aside instead of overwriting it silently."""
+    stamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    quarantine_path = filepath.with_name(f"{filepath.name}.invalid_{stamp}")
+    filepath.rename(quarantine_path)
+    log.warning("Moved invalid file to %s  reason=%s", quarantine_path, reason)
+    return quarantine_path
+
+
+# ---------------------------------------------------------------------------
+
+def build_request(year: int, area: list[float]) -> dict:
     return {
         "product_type":    "reanalysis",
         "variable":        [VARIABLE],
@@ -97,32 +200,53 @@ def build_request(year: int) -> dict:
         "month":           MONTHS,
         "day":             DAYS,
         "time":            HOURS,
-        "area":            AREA_PR,
+        "area":            area,
         "data_format":     "netcdf",
         "download_format": "unarchived",
     }
 
 
-def download_year(client: cdsapi.Client, year: int, outdir: Path) -> Path | None:
+def download_year(
+    client: cdsapi.Client,
+    year: int,
+    outdir: Path,
+    area: list[float],
+) -> tuple[str, Path | None]:
     filename = f"era5_hourly_tcwv_PR_{year}.nc"
     target = outdir / filename
 
     if target.exists():
-        log.info("SKIP (exists): %s", target)
-        return target
+        is_valid, reason = validate_tcwv_file(target, area)
+        if is_valid:
+            log.info("SKIP (valid existing): %s  %s", target, reason)
+            return "skipped", target
 
-    log.info("REQUEST  year=%d  variable=total_column_water_vapour", year)
+        log.warning("Existing file failed validation: %s  %s", target, reason)
+        quarantine_invalid_file(target, reason)
+
+    log.info(
+        "REQUEST  year=%d  variable=total_column_water_vapour  area=%s",
+        year,
+        area,
+    )
 
     try:
-        client.retrieve(DATASET, build_request(year), str(target))
+        client.retrieve(DATASET, build_request(year, area), str(target))
         size_gb = target.stat().st_size / 1e9
-        log.info("OK       %s  (%.2f GB)", target.name, size_gb)
-        return target
+
+        is_valid, reason = validate_tcwv_file(target, area)
+        if not is_valid:
+            log.error("Downloaded file failed validation: %s  %s", target, reason)
+            quarantine_invalid_file(target, reason)
+            return "failed", None
+
+        log.info("OK       %s  (%.2f GB)  %s", target.name, size_gb, reason)
+        return "downloaded", target
     except Exception as exc:
         log.error("FAILED   year=%d: %s", year, exc)
         if target.exists() and target.stat().st_size < 1000:
             target.unlink()
-        return None
+        return "failed", None
 
 
 def parse_args() -> argparse.Namespace:
@@ -131,11 +255,21 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--years", type=int, nargs="+", default=YEARS)
     p.add_argument("--outdir", type=Path, default=OUTDIR)
+    p.add_argument(
+        "--buffered-pr",
+        action="store_true",
+        help=(
+            "Use buffered Puerto Rico bbox for TCWV/PWV interpolation support: "
+            "[18.75, -68.25, 17.50, -64.75]. "
+            "Default keeps the original project bbox."
+        ),
+    )
     return p.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    area = AREA_PR_BUFFERED_FOR_INTERPOLATION if args.buffered_pr else AREA_PR
     args.outdir.mkdir(parents=True, exist_ok=True)
 
     log.info("=" * 60)
@@ -144,22 +278,30 @@ def main() -> None:
     log.info("Dataset : %s", DATASET)
     log.info("Variable: %s (TCWV ≈ PWV in mm)", VARIABLE)
     log.info("Years   : %d–%d", min(args.years), max(args.years))
+    log.info("Area    : %s", area)
     log.info("Output  : %s", args.outdir.resolve())
     log.info("Note    : 0.25° resolution (different from ERA5-Land 0.1°)")
     log.info("=" * 60)
 
     client = cdsapi.Client()
-    ok, failed = 0, 0
+    downloaded, skipped, failed = 0, 0, 0
 
     for year in sorted(args.years):
-        result = download_year(client, year, args.outdir)
-        if result is not None and "SKIP" not in str(result):
-            ok += 1
-        elif result is None:
+        status, _ = download_year(client, year, args.outdir, area)
+        if status == "downloaded":
+            downloaded += 1
+        elif status == "skipped":
+            skipped += 1
+        else:
             failed += 1
         time.sleep(2)
 
-    log.info("SUMMARY: %d downloaded, %d failed", ok, failed)
+    log.info(
+        "SUMMARY: %d downloaded, %d skipped_valid_existing, %d failed",
+        downloaded,
+        skipped,
+        failed,
+    )
 
 
 if __name__ == "__main__":
