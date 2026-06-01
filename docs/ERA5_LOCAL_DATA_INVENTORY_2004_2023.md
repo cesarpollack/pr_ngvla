@@ -78,7 +78,8 @@ Therefore, the local inventory documented here is necessary for reproducibility,
 | ERA5-Land hourly, Group B | `scripts/download_era5land_hourly_pr.py` | `reanalysis-era5-land` | ERA5-Land hourly | `10m_u_component_of_wind`, `10m_v_component_of_wind`, `total_precipitation`, `surface_pressure` | 2004–2023 | hourly | `[18.6, -68.0, 17.8, -65.0]` | `data_raw/era5/hourly/` | `era5land_hourly_wind_tp_sp_PR_YYYY_MM.nc` | Main higher-resolution land product for wind, precipitation, and pressure |
 | ERA5-Land monthly means, Group A | `scripts/download_era5land_monthly_pr.py` | `reanalysis-era5-land-monthly-means` | `monthly_averaged_reanalysis` | `2m_temperature`, `2m_dewpoint_temperature` | 2004–2023 | monthly | `[18.6, -68.0, 17.8, -65.0]` | `data_raw/era5/monthly/` | `era5land_monthly_t2m_d2m_PR_2004_2023.nc` | Monthly climatology workflow |
 | ERA5-Land monthly means, Group B | `scripts/download_era5land_monthly_pr.py` | `reanalysis-era5-land-monthly-means` | `monthly_averaged_reanalysis` | `10m_u_component_of_wind`, `10m_v_component_of_wind`, `total_precipitation`, `surface_pressure` | 2004–2023 | monthly | `[18.6, -68.0, 17.8, -65.0]` | `data_raw/era5/monthly/` | `era5land_monthly_wind_tp_sp_PR_2004_2023.nc` | Monthly climatology workflow |
-| ERA5 single levels TCWV/PWV | `scripts/download_era5_pwv_pr.py` | `reanalysis-era5-single-levels` | `reanalysis` | `total_column_water_vapour` | 2004–2023 | hourly | `[18.6, -68.0, 17.8, -65.0]` | `data_raw/era5/pwv/` | `era5_hourly_tcwv_PR_YYYY.nc` | PWV / total-column water-vapour analysis |
+| ERA5 single levels TCWV/PWV, original narrow request | `scripts/download_era5_pwv_pr.py` | `reanalysis-era5-single-levels` | `reanalysis` | `total_column_water_vapour` | 2004–2023 | hourly | `[18.6, -68.0, 17.8, -65.0]` | `data_raw/era5/pwv/` | `era5_hourly_tcwv_PR_YYYY.nc` | Original TCWV/PWV acquisition; preserved as diagnostic evidence because later tests showed insufficient interpolation support near southern Puerto Rico |
+| ERA5 single levels TCWV/PWV, buffered interpolation-support request | `scripts/download_era5_pwv_pr.py --buffered-pr` | `reanalysis-era5-single-levels` | `reanalysis` | `total_column_water_vapour` | 2004–2023 | hourly | `[18.75, -68.25, 17.50, -64.75]` | `data_raw/era5/pwv_buffered_pr/` | `era5_hourly_tcwv_PR_YYYY.nc` | Corrected TCWV/PWV raw dataset for interpolation support onto the ERA5-Land target grid; final analytical domain remains Puerto Rico |
 | ERA5 single levels auxiliary, Group A | `scripts/download_era5_singlelev_pr.py` | `reanalysis-era5-single-levels` | `reanalysis` | `2m_temperature`, `2m_dewpoint_temperature` | 2004–2023 | hourly | `[18.6, -68.0, 17.8, -65.0]`; grid `[0.25, 0.25]` | `data_raw/era5/singlelev/` | `era5sl_hourly_t2m_d2m_PR_YYYY_MM.nc` | Auxiliary coarser-grid atmospheric product for coastal/small-island support |
 | ERA5 single levels auxiliary, Group B | `scripts/download_era5_singlelev_pr.py` | `reanalysis-era5-single-levels` | `reanalysis` | `10m_u_component_of_wind`, `10m_v_component_of_wind`, `total_precipitation`, `surface_pressure` | 2004–2023 | hourly | `[18.6, -68.0, 17.8, -65.0]`; grid `[0.25, 0.25]` | `data_raw/era5/singlelev/` | `era5sl_hourly_wind_tp_sp_PR_YYYY_MM.nc` | Auxiliary coarser-grid atmospheric product for coastal/small-island support |
 
@@ -112,17 +113,19 @@ data_raw/era5/monthly/era5land_monthly_wind_tp_sp_PR_2004_2023.nc
 
 ### ERA5 single levels TCWV/PWV
 
-The TCWV/PWV script downloads one file per year:
+The TCWV/PWV script downloads one file per year. Two local TCWV/PWV acquisitions are now documented:
 
 ```text
+Original narrow request:
 20 years × 1 variable group = 20 files
-```
-
-Expected pattern:
-
-```text
 data_raw/era5/pwv/era5_hourly_tcwv_PR_YYYY.nc
+
+Corrected buffered interpolation-support request:
+20 years × 1 variable group = 20 files
+data_raw/era5/pwv_buffered_pr/era5_hourly_tcwv_PR_YYYY.nc
 ```
+
+The original narrow request is preserved for diagnostic traceability. The corrected buffered request is the structurally validated raw dataset intended to support interpolation/regridding onto the ERA5-Land target grid. The buffered spatial request does not expand the final analytical domain; final analysis remains restricted to Puerto Rico.
 
 ### ERA5 single levels auxiliary
 
@@ -236,6 +239,15 @@ ERA5-Land does not provide PWV/TCWV. Therefore, total column water vapour was do
 from ERA5 single levels using the CDS variable `total_column_water_vapour`. TCWV has units
 of kg m^-2, which is numerically equivalent to millimetres of precipitable water depth.
 ```
+
+Current local acquisition status after the coastal-gap diagnostic:
+
+- The original TCWV/PWV acquisition in `data_raw/era5/pwv/` used the narrower project bbox `[18.6, -68.0, 17.8, -65.0]`.
+- Diagnostics showed that this narrower native ERA5 Single Levels grid did not provide enough interpolation support for all Puerto Rico target-grid land cells.
+- The corrected buffered acquisition in `data_raw/era5/pwv_buffered_pr/` uses bbox `[18.75, -68.25, 17.50, -64.75]`.
+- The corrected buffered acquisition is complete for 2004–2023 with 20 structurally valid NetCDF files.
+- The NetCDF variable is present as `tcwv`; leap years contain 8784 hourly records and non-leap years contain 8760 hourly records.
+- The buffered domain is interpolation support only. It must not be interpreted as expanding the final Puerto Rico analysis domain.
 
 Do not state a specific numerical PWV validation-error value unless the exact supporting reference and context are checked and cited.
 
