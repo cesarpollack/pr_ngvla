@@ -198,11 +198,11 @@ print(f"  Precip SL mean exceedance (>1 mm/hr): "
 
 # ---------------------------------------------------------------------------
 # Land fraction filter — applied BEFORE regridding
-# Only use ERA5-SL pixels with >= 40% land fraction
+# Only use ERA5-SL pixels with >= 60% land fraction
 # Methodology: Nacar et al. (2022); Muñoz-Sabater et al. (2021)
 # ---------------------------------------------------------------------------
 
-print("\nComputing ERA5-SL land fraction mask (threshold=40%)...")
+print("\nComputing ERA5-SL land fraction mask (threshold=60%)...")
 
 import geopandas as gpd
 from shapely.geometry import box as shapely_box
@@ -295,7 +295,7 @@ prov_da = xr.DataArray(
         "land_frac_threshold": LAND_FRAC_THRESHOLD,
         "description": (
             "0=NaN/ocean, 1=ERA5-Land (~9km), "
-            "2=ERA5-SL gap-fill (>=40% land fraction, ~28km)"
+            "2=ERA5-SL gap-fill (>=60% land fraction, ~28km)"
         ),
     }
 )
