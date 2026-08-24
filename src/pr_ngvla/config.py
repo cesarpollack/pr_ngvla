@@ -134,9 +134,47 @@ STUDY_YEARS = list(range(STUDY_YEAR_START, STUDY_YEAR_END + 1))
 STUDY_START_DATE = "2004-01-01"
 STUDY_END_DATE = "2023-12-31"
 
-# Hurricane María exclusion window (inclusive, YYYY-MM)
-MARIA_START = "2017-09"
-MARIA_END = "2018-06"
+
+# ---------------------------------------------------------------------------
+# Hurricane María exclusion window
+# ---------------------------------------------------------------------------
+# Project-level exclusion window for climatological analyses affected by
+# Hurricane María's post-landfall hydrological disruption.
+#
+# Window definition:
+#   start inclusive: 2017-09-20 00:00:00
+#   end inclusive:   2018-01-31 23:59:59...
+#   end exclusive:   2018-02-01 00:00:00
+#
+# Rationale:
+#   The window starts on Hurricane María's Puerto Rico landfall date and ends
+#   before February 2018, following the project interpretation of Miller et al.
+#   (2019), "Persistent Hydrological Consequences of Hurricane Maria in
+#   Puerto Rico", Geophysical Research Letters, 46(3), 1413-1422,
+#   doi:10.1029/2018GL081591.
+#
+# Important implementation detail:
+#   MARIA_EXCLUSION_*_DATE provides the exact day-level window for hourly
+#   station products. MARIA_START / MARIA_END are retained as month-level
+#   compatibility constants for existing monthly ERA5 scripts that currently
+#   filter by YYYY-MM rather than exact dates.
+MARIA_EXCLUSION_START_DATE = "2017-09-20"
+MARIA_EXCLUSION_END_DATE = "2018-01-31"
+MARIA_EXCLUSION_END_EXCLUSIVE_DATE = "2018-02-01"
+MARIA_EXCLUSION_SOURCE = (
+    "Miller et al. (2019), Persistent Hydrological Consequences of "
+    "Hurricane Maria in Puerto Rico, Geophysical Research Letters, "
+    "doi:10.1029/2018GL081591"
+)
+
+# Month-level compatibility constants used by legacy monthly ERA5 code.
+# This excludes full calendar months overlapping the date-level window.
+MARIA_MONTH_START = "2017-09"
+MARIA_MONTH_END = "2018-01"
+
+# Backward-compatible names used by existing Phase 2 ERA5 code.
+MARIA_START = MARIA_MONTH_START
+MARIA_END = MARIA_MONTH_END
 
 
 # ---------------------------------------------------------------------------
